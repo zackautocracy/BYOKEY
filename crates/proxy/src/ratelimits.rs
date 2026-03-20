@@ -113,7 +113,7 @@ mod tests {
         let state = make_state();
         // Insert a snapshot directly
         state.ratelimits.update(
-            ProviderId::Claude,
+            ProviderId::Anthropic,
             "active".into(),
             RateLimitSnapshot {
                 headers: std::collections::HashMap::from([(
@@ -141,7 +141,7 @@ mod tests {
 
         let providers = json["providers"].as_array().unwrap();
         assert_eq!(providers.len(), 1);
-        assert_eq!(providers[0]["id"], "claude");
+        assert_eq!(providers[0]["id"], "anthropic");
         let accounts = providers[0]["accounts"].as_array().unwrap();
         assert_eq!(accounts.len(), 1);
         assert_eq!(accounts[0]["account_id"], "active");

@@ -117,7 +117,7 @@ mod tests {
     #[tokio::test]
     async fn test_token_not_found_error() {
         let (status, body) =
-            extract_error_body(ApiError(ByokError::TokenNotFound(ProviderId::Claude))).await;
+            extract_error_body(ApiError(ByokError::TokenNotFound(ProviderId::Anthropic))).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         assert_eq!(body["error"]["type"], "authentication_error");
         assert_eq!(body["error"]["code"], "token_not_found");

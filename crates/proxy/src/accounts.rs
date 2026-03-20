@@ -216,7 +216,7 @@ mod tests {
         let token = OAuthToken::new("test-access").with_expiry(3600);
         store
             .save_account(
-                &byokey_types::ProviderId::Claude,
+                &byokey_types::ProviderId::Anthropic,
                 "default",
                 Some("my-account"),
                 &token,
@@ -241,7 +241,7 @@ mod tests {
             .as_array()
             .unwrap()
             .iter()
-            .find(|p| p["id"] == "claude")
+            .find(|p| p["id"] == "anthropic")
             .unwrap();
         let accounts = claude["accounts"].as_array().unwrap();
         assert_eq!(accounts.len(), 1);
@@ -256,7 +256,7 @@ mod tests {
         let (state, store) = make_state();
         let token = OAuthToken::new("test-access");
         store
-            .save_account(&byokey_types::ProviderId::Claude, "default", None, &token)
+            .save_account(&byokey_types::ProviderId::Anthropic, "default", None, &token)
             .await
             .unwrap();
 
@@ -265,7 +265,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("DELETE")
-                    .uri("/v0/management/accounts/claude/default")
+                    .uri("/v0/management/accounts/anthropic/default")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -296,7 +296,7 @@ mod tests {
     #[tokio::test]
     async fn test_activate_account() {
         let (state, store) = make_state();
-        let provider = &byokey_types::ProviderId::Claude;
+        let provider = &byokey_types::ProviderId::Anthropic;
         let token1 = OAuthToken::new("tok1");
         let token2 = OAuthToken::new("tok2");
         store
@@ -313,7 +313,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/v0/management/accounts/claude/acct2/activate")
+                    .uri("/v0/management/accounts/anthropic/acct2/activate")
                     .body(Body::empty())
                     .unwrap(),
             )

@@ -76,6 +76,40 @@ impl ByokError {
             _ => false,
         }
     }
+
+    /// Returns `true` if the error indicates a rate limit (not a general server error).
+    ///
+    /// Used for OAuth account rotation where only rate limits warrant trying
+    /// a different account (unlike API key rotation which retries on any transient error).
+    #[must_use]
+    pub fn is_rate_limited(&self) -> bool {
+        match self {
+            Self::Upstream { status: 429, .. } => true,
+            Self::Upstream { status: 400, body } => {
+                let lower = body.to_lowercase();
+                lower.contains("rate_limit") || lower.contains("too many requests")
+            }
+            Self::Upstream { status: 503, body } => {
+                let lower = body.to_lowercase();
+                lower.contains("rate") && lower.contains("limit")
+            }
+            _ => false,
+        }
+    }
+
+    /// Returns `true` if the error is scoped to the credential (not the request).
+    ///
+    /// Credential errors (401 Unauthorized, 403 Forbidden, authentication failures)
+    /// should trigger cooldown + rotation to the next credential, not cascade
+    /// to the next routing slot.
+    #[must_use]
+    pub fn is_credential_error(&self) -> bool {
+        match self {
+            Self::Upstream { status, .. } => matches!(status, 401 | 403),
+            Self::Auth(_) => true,
+            _ => false,
+        }
+    }
 }
 
 /// Convenience alias used throughout the workspace.
@@ -93,8 +127,8 @@ mod tests {
 
     #[test]
     fn test_error_display_token_not_found() {
-        let err = ByokError::TokenNotFound(crate::ProviderId::Claude);
-        assert!(err.to_string().contains("claude"));
+        let err = ByokError::TokenNotFound(crate::ProviderId::Anthropic);
+        assert!(err.to_string().contains("anthropic"));
     }
 
     #[test]
@@ -192,5 +226,102 @@ mod tests {
         assert!(!ByokError::Auth("bad".into()).is_retryable());
         assert!(!ByokError::Config("bad".into()).is_retryable());
         assert!(!ByokError::UnsupportedModel("gpt-5".into()).is_retryable());
+    }
+
+    #[test]
+    fn test_is_rate_limited_429() {
+        assert!(ByokError::Upstream {
+            status: 429,
+            body: String::new()
+        }
+        .is_rate_limited());
+    }
+
+    #[test]
+    fn test_is_rate_limited_codex_400() {
+        assert!(ByokError::Upstream {
+            status: 400,
+            body: "rate_limit exceeded".into()
+        }
+        .is_rate_limited());
+        assert!(ByokError::Upstream {
+            status: 400,
+            body: "too many requests".into()
+        }
+        .is_rate_limited());
+    }
+
+    #[test]
+    fn test_is_rate_limited_false_for_server_errors() {
+        assert!(!ByokError::Upstream {
+            status: 500,
+            body: String::new()
+        }
+        .is_rate_limited());
+        assert!(!ByokError::Upstream {
+            status: 502,
+            body: String::new()
+        }
+        .is_rate_limited());
+    }
+
+    #[test]
+    fn test_is_rate_limited_false_for_auth() {
+        assert!(!ByokError::Upstream {
+            status: 401,
+            body: String::new()
+        }
+        .is_rate_limited());
+        assert!(!ByokError::Http("connection refused".into()).is_rate_limited());
+    }
+
+    #[test]
+    fn test_credential_error_upstream_401() {
+        let err = ByokError::Upstream {
+            status: 401,
+            body: "unauthorized".into(),
+        };
+        assert!(err.is_credential_error());
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_credential_error_upstream_403() {
+        let err = ByokError::Upstream {
+            status: 403,
+            body: "forbidden".into(),
+        };
+        assert!(err.is_credential_error());
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_credential_error_auth() {
+        let err = ByokError::Auth("token exchange failed".into());
+        assert!(err.is_credential_error());
+    }
+
+    #[test]
+    fn test_credential_error_not_on_429() {
+        let err = ByokError::Upstream {
+            status: 429,
+            body: "rate limited".into(),
+        };
+        assert!(!err.is_credential_error());
+    }
+
+    #[test]
+    fn test_credential_error_not_on_500() {
+        let err = ByokError::Upstream {
+            status: 500,
+            body: "server error".into(),
+        };
+        assert!(!err.is_credential_error());
+    }
+
+    #[test]
+    fn test_credential_error_not_on_http() {
+        let err = ByokError::Http("connection reset".into());
+        assert!(!err.is_credential_error());
     }
 }

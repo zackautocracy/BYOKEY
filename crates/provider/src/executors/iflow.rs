@@ -23,6 +23,7 @@ const API_URL: &str = "https://apis.iflow.cn/v1/chat/completions";
 pub struct IFlowExecutor {
     ph: ProviderHttp,
     api_key: Option<String>,
+    account_id: Option<String>,
     auth: Arc<AuthManager>,
 }
 
@@ -31,6 +32,7 @@ impl IFlowExecutor {
     pub fn new(
         http: Client,
         api_key: Option<String>,
+        account_id: Option<String>,
         auth: Arc<AuthManager>,
         ratelimit: Option<Arc<RateLimitStore>>,
     ) -> Self {
@@ -38,7 +40,7 @@ impl IFlowExecutor {
         if let Some(store) = ratelimit {
             ph = ph.with_ratelimit(store, ProviderId::IFlow);
         }
-        Self { ph, api_key, auth }
+        Self { ph, api_key, account_id, auth }
     }
 
     /// Resolves the API key: config-provided key first, otherwise from the auth store.
@@ -46,7 +48,10 @@ impl IFlowExecutor {
         if let Some(key) = &self.api_key {
             return Ok(key.clone());
         }
-        let token = self.auth.get_token(&ProviderId::IFlow).await?;
+        let token = match &self.account_id {
+            Some(id) => self.auth.get_token_for(&ProviderId::IFlow, id).await?,
+            None => self.auth.get_token(&ProviderId::IFlow).await?,
+        };
         Ok(token.access_token)
     }
 }
@@ -114,7 +119,7 @@ mod tests {
     fn make_executor() -> IFlowExecutor {
         let store = Arc::new(InMemoryTokenStore::new());
         let auth = Arc::new(AuthManager::new(store, rquest::Client::new()));
-        IFlowExecutor::new(Client::new(), None, auth, None)
+        IFlowExecutor::new(Client::new(), None, None, auth, None)
     }
 
     #[test]

@@ -4,7 +4,7 @@ use byokey_types::{ResponseTranslator, traits::Result};
 use serde_json::{Value, json};
 
 /// Translator from Claude response format to `OpenAI` chat completion format.
-pub struct ClaudeToOpenAI;
+pub struct AnthropicToOpenAI;
 
 /// Maps a Claude `stop_reason` to an `OpenAI` `finish_reason`.
 fn map_finish_reason(stop_reason: Option<&str>) -> &'static str {
@@ -15,7 +15,7 @@ fn map_finish_reason(stop_reason: Option<&str>) -> &'static str {
     }
 }
 
-impl ResponseTranslator for ClaudeToOpenAI {
+impl ResponseTranslator for AnthropicToOpenAI {
     /// Translates a Claude Messages API response into an `OpenAI` chat completion response.
     ///
     /// # Errors
@@ -130,7 +130,7 @@ mod tests {
 
     #[test]
     fn test_basic() {
-        let out = ClaudeToOpenAI.translate_response(sample()).unwrap();
+        let out = AnthropicToOpenAI.translate_response(sample()).unwrap();
         assert_eq!(out["choices"][0]["message"]["content"], "Hello there!");
         assert_eq!(out["choices"][0]["message"]["role"], "assistant");
         assert_eq!(out["choices"][0]["finish_reason"], "stop");
@@ -138,13 +138,13 @@ mod tests {
 
     #[test]
     fn test_model_forwarded() {
-        let out = ClaudeToOpenAI.translate_response(sample()).unwrap();
+        let out = AnthropicToOpenAI.translate_response(sample()).unwrap();
         assert_eq!(out["model"], "claude-opus-4-5");
     }
 
     #[test]
     fn test_usage_mapping() {
-        let out = ClaudeToOpenAI.translate_response(sample()).unwrap();
+        let out = AnthropicToOpenAI.translate_response(sample()).unwrap();
         assert_eq!(out["usage"]["prompt_tokens"], 10);
         assert_eq!(out["usage"]["completion_tokens"], 5);
         assert_eq!(out["usage"]["total_tokens"], 15);
@@ -152,7 +152,7 @@ mod tests {
 
     #[test]
     fn test_id_prefixed() {
-        let out = ClaudeToOpenAI.translate_response(sample()).unwrap();
+        let out = AnthropicToOpenAI.translate_response(sample()).unwrap();
         assert!(out["id"].as_str().unwrap().starts_with("chatcmpl-"));
     }
 
@@ -169,7 +169,7 @@ mod tests {
             "stop_reason": "tool_use",
             "usage": {"input_tokens": 10, "output_tokens": 20}
         });
-        let out = ClaudeToOpenAI.translate_response(res).unwrap();
+        let out = AnthropicToOpenAI.translate_response(res).unwrap();
         let msg = &out["choices"][0]["message"];
         assert_eq!(msg["content"], Value::Null);
         let tc = msg["tool_calls"].as_array().unwrap();
@@ -196,7 +196,7 @@ mod tests {
             "stop_reason": "tool_use",
             "usage": {"input_tokens": 10, "output_tokens": 20}
         });
-        let out = ClaudeToOpenAI.translate_response(res).unwrap();
+        let out = AnthropicToOpenAI.translate_response(res).unwrap();
         let msg = &out["choices"][0]["message"];
         assert_eq!(msg["content"], "Let me check the weather.");
         assert!(msg["tool_calls"].as_array().unwrap().len() == 1);
@@ -215,7 +215,7 @@ mod tests {
             "stop_reason": "tool_use",
             "usage": {"input_tokens": 1, "output_tokens": 1}
         });
-        let out = ClaudeToOpenAI.translate_response(res).unwrap();
+        let out = AnthropicToOpenAI.translate_response(res).unwrap();
         assert_eq!(out["choices"][0]["finish_reason"], "tool_calls");
     }
 
@@ -223,13 +223,13 @@ mod tests {
     fn test_finish_reason_length() {
         let mut r = sample();
         r["stop_reason"] = json!("max_tokens");
-        let out = ClaudeToOpenAI.translate_response(r).unwrap();
+        let out = AnthropicToOpenAI.translate_response(r).unwrap();
         assert_eq!(out["choices"][0]["finish_reason"], "length");
     }
 
     #[test]
     fn test_object_field() {
-        let out = ClaudeToOpenAI.translate_response(sample()).unwrap();
+        let out = AnthropicToOpenAI.translate_response(sample()).unwrap();
         assert_eq!(out["object"], "chat.completion");
     }
 }

@@ -19,6 +19,7 @@ const API_URL: &str = "https://generativelanguage.googleapis.com/v1beta/openai/c
 pub struct GeminiExecutor {
     ph: ProviderHttp,
     api_key: Option<String>,
+    account_id: Option<String>,
     auth: Arc<AuthManager>,
 }
 
@@ -27,6 +28,7 @@ impl GeminiExecutor {
     pub fn new(
         http: Client,
         api_key: Option<String>,
+        account_id: Option<String>,
         auth: Arc<AuthManager>,
         ratelimit: Option<Arc<RateLimitStore>>,
     ) -> Self {
@@ -34,7 +36,7 @@ impl GeminiExecutor {
         if let Some(store) = ratelimit {
             ph = ph.with_ratelimit(store, ProviderId::Gemini);
         }
-        Self { ph, api_key, auth }
+        Self { ph, api_key, account_id, auth }
     }
 
     /// Returns the auth header: `x-goog-api-key` for API keys, `Authorization: Bearer` for OAuth.
@@ -42,7 +44,10 @@ impl GeminiExecutor {
         if let Some(key) = &self.api_key {
             return Ok(("x-goog-api-key", key.clone()));
         }
-        let token = self.auth.get_token(&ProviderId::Gemini).await?;
+        let token = match &self.account_id {
+            Some(id) => self.auth.get_token_for(&ProviderId::Gemini, id).await?,
+            None => self.auth.get_token(&ProviderId::Gemini).await?,
+        };
         Ok(("authorization", format!("Bearer {}", token.access_token)))
     }
 }
@@ -80,7 +85,7 @@ mod tests {
     fn make_executor() -> GeminiExecutor {
         let store = Arc::new(InMemoryTokenStore::new());
         let auth = Arc::new(AuthManager::new(store, rquest::Client::new()));
-        GeminiExecutor::new(Client::new(), None, auth, None)
+        GeminiExecutor::new(Client::new(), None, None, auth, None)
     }
 
     #[test]

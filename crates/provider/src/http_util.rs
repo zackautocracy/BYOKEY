@@ -159,7 +159,7 @@ mod tests {
     #[test]
     fn test_with_ratelimit() {
         let store = Arc::new(RateLimitStore::new());
-        let http = ProviderHttp::new(Client::new()).with_ratelimit(store, ProviderId::Claude);
+        let http = ProviderHttp::new(Client::new()).with_ratelimit(store, ProviderId::Anthropic);
         assert!(http.rl_ctx.is_some());
     }
 }

@@ -7,7 +7,8 @@ pub mod schema;
 pub mod watcher;
 
 pub use schema::{
-    AmpConfig, ApiKeyEntry, Config, LogConfig, ModelAlias, PayloadFilterRule, PayloadRule,
-    PayloadRules, ProviderConfig, StreamingConfig, TlsConfig,
+    AmpConfig, ApiKeyEntry, BalancingStrategy, Config, CredentialSourceKind, LogConfig, ModelAlias,
+    PayloadFilterRule, PayloadRule, PayloadRules, ProviderConfig, RoutingEntry, StreamingConfig,
+    TlsConfig,
 };
 pub use watcher::ConfigWatcher;

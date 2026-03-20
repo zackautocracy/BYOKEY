@@ -4,7 +4,7 @@ use byokey_types::{ByokError, RequestTranslator, traits::Result};
 use serde_json::{Value, json};
 
 /// Translator from `OpenAI` chat completion request format to Claude Messages API format.
-pub struct OpenAIToClaude;
+pub struct OpenAIToAnthropic;
 
 /// Builds Claude `messages` array from non-system `OpenAI` messages.
 ///
@@ -92,7 +92,7 @@ fn build_claude_messages(non_system: &[&Value]) -> Vec<Value> {
     claude_messages
 }
 
-impl RequestTranslator for OpenAIToClaude {
+impl RequestTranslator for OpenAIToAnthropic {
     /// Translates an `OpenAI` chat completion request into a Claude Messages API request.
     ///
     /// System messages are extracted and merged into the top-level `system` field.
@@ -207,7 +207,7 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}],
             "max_tokens": 100
         });
-        let out = OpenAIToClaude.translate_request(req).unwrap();
+        let out = OpenAIToAnthropic.translate_request(req).unwrap();
         assert_eq!(out["model"], "claude-opus-4-5");
         assert_eq!(out["max_tokens"], 100);
         assert_eq!(out["messages"][0]["role"], "user");
@@ -223,7 +223,7 @@ mod tests {
                 {"role": "user", "content": "Hi"}
             ]
         });
-        let out = OpenAIToClaude.translate_request(req).unwrap();
+        let out = OpenAIToAnthropic.translate_request(req).unwrap();
         assert_eq!(out["system"], "You are helpful.");
         assert_eq!(out["messages"].as_array().unwrap().len(), 1);
         assert_eq!(out["messages"][0]["role"], "user");
@@ -235,7 +235,7 @@ mod tests {
             "model": "claude-opus-4-5",
             "messages": [{"role": "user", "content": "hi"}]
         });
-        let out = OpenAIToClaude.translate_request(req).unwrap();
+        let out = OpenAIToAnthropic.translate_request(req).unwrap();
         assert_eq!(out["max_tokens"], 4096);
     }
 
@@ -246,7 +246,7 @@ mod tests {
             "messages": [{"role": "user", "content": "hi"}],
             "temperature": 0.7
         });
-        let out = OpenAIToClaude.translate_request(req).unwrap();
+        let out = OpenAIToAnthropic.translate_request(req).unwrap();
         assert_eq!(out["temperature"], 0.7);
     }
 
@@ -257,7 +257,7 @@ mod tests {
             "messages": [{"role": "user", "content": "hi"}],
             "stream": true
         });
-        let out = OpenAIToClaude.translate_request(req).unwrap();
+        let out = OpenAIToAnthropic.translate_request(req).unwrap();
         assert_eq!(out["stream"], true);
     }
 
@@ -281,7 +281,7 @@ mod tests {
                 }
             }]
         });
-        let out = OpenAIToClaude.translate_request(req).unwrap();
+        let out = OpenAIToAnthropic.translate_request(req).unwrap();
         let tools = out["tools"].as_array().unwrap();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0]["name"], "get_weather");
@@ -303,7 +303,7 @@ mod tests {
             "messages": [{"role": "user", "content": "hi"}],
             "tool_choice": "auto"
         });
-        let out = OpenAIToClaude.translate_request(req).unwrap();
+        let out = OpenAIToAnthropic.translate_request(req).unwrap();
         assert_eq!(out["tool_choice"]["type"], "auto");
     }
 
@@ -314,7 +314,7 @@ mod tests {
             "messages": [{"role": "user", "content": "hi"}],
             "tool_choice": {"type": "function", "function": {"name": "get_weather"}}
         });
-        let out = OpenAIToClaude.translate_request(req).unwrap();
+        let out = OpenAIToAnthropic.translate_request(req).unwrap();
         assert_eq!(out["tool_choice"]["type"], "tool");
         assert_eq!(out["tool_choice"]["name"], "get_weather");
     }
@@ -339,7 +339,7 @@ mod tests {
                 }
             ]
         });
-        let out = OpenAIToClaude.translate_request(req).unwrap();
+        let out = OpenAIToAnthropic.translate_request(req).unwrap();
         let assistant_msg = &out["messages"][1];
         assert_eq!(assistant_msg["role"], "assistant");
         let content = assistant_msg["content"].as_array().unwrap();
@@ -371,7 +371,7 @@ mod tests {
                 {"role": "tool", "tool_call_id": "call_1", "content": "Sunny, 25C"}
             ]
         });
-        let out = OpenAIToClaude.translate_request(req).unwrap();
+        let out = OpenAIToAnthropic.translate_request(req).unwrap();
         // tool message becomes a user message with tool_result content
         let tool_result_msg = &out["messages"][2];
         assert_eq!(tool_result_msg["role"], "user");
@@ -400,7 +400,7 @@ mod tests {
                 {"role": "tool", "tool_call_id": "call_2", "content": "result2"}
             ]
         });
-        let out = OpenAIToClaude.translate_request(req).unwrap();
+        let out = OpenAIToAnthropic.translate_request(req).unwrap();
         // Two consecutive tool messages merged into one user message
         assert_eq!(out["messages"].as_array().unwrap().len(), 3);
         let tool_msg = &out["messages"][2];
@@ -414,12 +414,12 @@ mod tests {
     #[test]
     fn test_missing_model_error() {
         let req = json!({"messages": [{"role": "user", "content": "hi"}]});
-        assert!(OpenAIToClaude.translate_request(req).is_err());
+        assert!(OpenAIToAnthropic.translate_request(req).is_err());
     }
 
     #[test]
     fn test_missing_messages_error() {
         let req = json!({"model": "m"});
-        assert!(OpenAIToClaude.translate_request(req).is_err());
+        assert!(OpenAIToAnthropic.translate_request(req).is_err());
     }
 }

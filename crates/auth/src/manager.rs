@@ -25,7 +25,7 @@ struct ProviderState {
 pub struct AuthManager {
     store: Arc<dyn TokenStore>,
     http: rquest::Client,
-    state: Mutex<HashMap<ProviderId, ProviderState>>,
+    state: Mutex<HashMap<(ProviderId, String), ProviderState>>,
 }
 
 impl AuthManager {
@@ -53,7 +53,7 @@ impl AuthManager {
 
         match token.state() {
             TokenState::Valid => Ok(token),
-            TokenState::Expired => self.refresh_token(provider, &token).await,
+            TokenState::Expired => self.refresh_token(provider, "__active__", &token).await,
             TokenState::Invalid => Err(ByokError::TokenExpired(provider.clone())),
         }
     }
@@ -131,7 +131,7 @@ impl AuthManager {
 
         match token.state() {
             TokenState::Valid => Ok(token),
-            TokenState::Expired => self.refresh_token(provider, &token).await,
+            TokenState::Expired => self.refresh_token(provider, account_id, &token).await,
             TokenState::Invalid => Err(ByokError::TokenExpired(provider.clone())),
         }
     }
@@ -174,24 +174,31 @@ impl AuthManager {
 
     // ── Private helpers ──────────────────────────────────────────────────
 
-    async fn refresh_token(&self, provider: &ProviderId, token: &OAuthToken) -> Result<OAuthToken> {
+    async fn refresh_token(
+        &self,
+        provider: &ProviderId,
+        account_id: &str,
+        token: &OAuthToken,
+    ) -> Result<OAuthToken> {
         // Check cooldown period
         {
             let state = self.state.lock().unwrap();
-            if let Some(ps) = state.get(provider)
+            let key = (provider.clone(), account_id.to_string());
+            if let Some(ps) = state.get(&key)
                 && let Some(last) = ps.last_refresh_attempt
                 && last.elapsed() < REFRESH_COOLDOWN
             {
                 return Err(ByokError::Auth(format!(
-                    "refresh cooldown active for {provider}"
+                    "refresh cooldown active for {provider}/{account_id}"
                 )));
             }
         }
         // Record refresh attempt timestamp
         {
             let mut state = self.state.lock().unwrap();
+            let key = (provider.clone(), account_id.to_string());
             state.insert(
-                provider.clone(),
+                key,
                 ProviderState {
                     last_refresh_attempt: Some(Instant::now()),
                 },
@@ -409,7 +416,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_token_not_found() {
         let m = make_manager();
-        let err = m.get_token(&ProviderId::Claude).await.unwrap_err();
+        let err = m.get_token(&ProviderId::Anthropic).await.unwrap_err();
         assert!(matches!(err, ByokError::TokenNotFound(_)));
     }
 
@@ -417,8 +424,8 @@ mod tests {
     async fn test_get_valid_token() {
         let m = make_manager();
         let tok = OAuthToken::new("valid").with_expiry(3600);
-        m.save_token(&ProviderId::Claude, tok).await.unwrap();
-        let got = m.get_token(&ProviderId::Claude).await.unwrap();
+        m.save_token(&ProviderId::Anthropic, tok).await.unwrap();
+        let got = m.get_token(&ProviderId::Anthropic).await.unwrap();
         assert_eq!(got.access_token, "valid");
     }
 
@@ -439,16 +446,16 @@ mod tests {
     #[tokio::test]
     async fn test_is_authenticated_false_when_missing() {
         let m = make_manager();
-        assert!(!m.is_authenticated(&ProviderId::Codex).await);
+        assert!(!m.is_authenticated(&ProviderId::OpenAI).await);
     }
 
     #[tokio::test]
     async fn test_is_authenticated_true_when_valid() {
         let m = make_manager();
-        m.save_token(&ProviderId::Codex, OAuthToken::new("tok"))
+        m.save_token(&ProviderId::OpenAI, OAuthToken::new("tok"))
             .await
             .unwrap();
-        assert!(m.is_authenticated(&ProviderId::Codex).await);
+        assert!(m.is_authenticated(&ProviderId::OpenAI).await);
     }
 
     #[tokio::test]
@@ -492,14 +499,14 @@ mod tests {
     async fn test_save_and_get_token_for() {
         let m = make_manager();
         m.save_token_for(
-            &ProviderId::Claude,
+            &ProviderId::Anthropic,
             "work",
             Some("Work Account"),
             OAuthToken::new("work-tok").with_expiry(3600),
         )
         .await
         .unwrap();
-        let tok = m.get_token_for(&ProviderId::Claude, "work").await.unwrap();
+        let tok = m.get_token_for(&ProviderId::Anthropic, "work").await.unwrap();
         assert_eq!(tok.access_token, "work-tok");
     }
 
@@ -507,48 +514,48 @@ mod tests {
     async fn test_list_accounts() {
         let m = make_manager();
         m.save_token_for(
-            &ProviderId::Claude,
+            &ProviderId::Anthropic,
             "a",
             Some("Account A"),
             OAuthToken::new("a"),
         )
         .await
         .unwrap();
-        m.save_token_for(&ProviderId::Claude, "b", None, OAuthToken::new("b"))
+        m.save_token_for(&ProviderId::Anthropic, "b", None, OAuthToken::new("b"))
             .await
             .unwrap();
-        let accounts = m.list_accounts(&ProviderId::Claude).await.unwrap();
+        let accounts = m.list_accounts(&ProviderId::Anthropic).await.unwrap();
         assert_eq!(accounts.len(), 2);
     }
 
     #[tokio::test]
     async fn test_set_active_account() {
         let m = make_manager();
-        m.save_token_for(&ProviderId::Claude, "a", None, OAuthToken::new("tok-a"))
+        m.save_token_for(&ProviderId::Anthropic, "a", None, OAuthToken::new("tok-a"))
             .await
             .unwrap();
-        m.save_token_for(&ProviderId::Claude, "b", None, OAuthToken::new("tok-b"))
+        m.save_token_for(&ProviderId::Anthropic, "b", None, OAuthToken::new("tok-b"))
             .await
             .unwrap();
-        m.set_active_account(&ProviderId::Claude, "b")
+        m.set_active_account(&ProviderId::Anthropic, "b")
             .await
             .unwrap();
         // Active-account shortcut now returns "b".
-        let tok = m.get_token(&ProviderId::Claude).await.unwrap();
+        let tok = m.get_token(&ProviderId::Anthropic).await.unwrap();
         assert_eq!(tok.access_token, "tok-b");
     }
 
     #[tokio::test]
     async fn test_remove_token_for() {
         let m = make_manager();
-        m.save_token_for(&ProviderId::Claude, "work", None, OAuthToken::new("w"))
+        m.save_token_for(&ProviderId::Anthropic, "work", None, OAuthToken::new("w"))
             .await
             .unwrap();
-        m.remove_token_for(&ProviderId::Claude, "work")
+        m.remove_token_for(&ProviderId::Anthropic, "work")
             .await
             .unwrap();
         let err = m
-            .get_token_for(&ProviderId::Claude, "work")
+            .get_token_for(&ProviderId::Anthropic, "work")
             .await
             .unwrap_err();
         assert!(matches!(err, ByokError::TokenNotFound(_)));
@@ -557,13 +564,48 @@ mod tests {
     #[tokio::test]
     async fn test_get_all_tokens() {
         let m = make_manager();
-        m.save_token_for(&ProviderId::Claude, "a", None, OAuthToken::new("tok-a"))
+        m.save_token_for(&ProviderId::Anthropic, "a", None, OAuthToken::new("tok-a"))
             .await
             .unwrap();
-        m.save_token_for(&ProviderId::Claude, "b", None, OAuthToken::new("tok-b"))
+        m.save_token_for(&ProviderId::Anthropic, "b", None, OAuthToken::new("tok-b"))
             .await
             .unwrap();
-        let all = m.get_all_tokens(&ProviderId::Claude).await.unwrap();
+        let all = m.get_all_tokens(&ProviderId::Anthropic).await.unwrap();
         assert_eq!(all.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_refresh_cooldown_per_account() {
+        let m = make_manager();
+        // Insert expired tokens for two accounts
+        let expired = OAuthToken {
+            access_token: "old".into(),
+            refresh_token: Some("ref".into()),
+            expires_at: Some(past_ts(100)),
+            token_type: None,
+        };
+        m.save_token_for(&ProviderId::OpenAI, "acct-a", None, expired.clone())
+            .await
+            .unwrap();
+        m.save_token_for(&ProviderId::OpenAI, "acct-b", None, expired)
+            .await
+            .unwrap();
+
+        // First refresh attempt for acct-a (will fail due to no real token endpoint,
+        // but records the cooldown for acct-a)
+        let _ = m.get_token_for(&ProviderId::OpenAI, "acct-a").await;
+
+        // acct-b should NOT be blocked by acct-a's cooldown
+        let err = m
+            .get_token_for(&ProviderId::OpenAI, "acct-b")
+            .await
+            .unwrap_err();
+        let msg = err.to_string();
+        // Should NOT contain "cooldown" — it should fail for a different reason
+        // (e.g., refresh endpoint unreachable), not cooldown
+        assert!(
+            !msg.contains("cooldown"),
+            "acct-b should not be blocked by acct-a's cooldown, got: {msg}"
+        );
     }
 }

@@ -6,8 +6,8 @@
 
 pub mod antigravity;
 pub mod callback;
-pub mod claude;
-pub mod codex;
+pub mod anthropic;
+pub mod openai;
 pub mod copilot;
 pub mod credentials;
 pub mod flow;

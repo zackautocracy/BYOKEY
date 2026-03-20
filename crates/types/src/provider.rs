@@ -7,22 +7,24 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ProviderId {
-    Claude,
-    Codex,
+    Anthropic,
+    #[serde(rename = "openai")]
+    OpenAI,
     Gemini,
     Kiro,
     Copilot,
     Antigravity,
     Qwen,
     Kimi,
+    #[serde(rename = "iflow")]
     IFlow,
 }
 
 impl fmt::Display for ProviderId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Claude => write!(f, "claude"),
-            Self::Codex => write!(f, "codex"),
+            Self::Anthropic => write!(f, "anthropic"),
+            Self::OpenAI => write!(f, "openai"),
             Self::Gemini => write!(f, "gemini"),
             Self::Kiro => write!(f, "kiro"),
             Self::Copilot => write!(f, "copilot"),
@@ -45,8 +47,8 @@ impl std::str::FromStr for ProviderId {
     /// any known provider name or alias.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "claude" | "anthropic" => Ok(Self::Claude),
-            "codex" | "openai" => Ok(Self::Codex),
+            "anthropic" => Ok(Self::Anthropic),
+            "openai" => Ok(Self::OpenAI),
             "gemini" | "google" => Ok(Self::Gemini),
             "kiro" => Ok(Self::Kiro),
             "copilot" | "github" => Ok(Self::Copilot),
@@ -64,8 +66,8 @@ impl ProviderId {
     #[must_use]
     pub fn display_name(&self) -> &'static str {
         match self {
-            Self::Claude => "Claude (Anthropic)",
-            Self::Codex => "Codex (OpenAI)",
+            Self::Anthropic => "Claude (Anthropic)",
+            Self::OpenAI => "GPT (OpenAI)",
             Self::Gemini => "Gemini (Google)",
             Self::Kiro => "Kiro (AWS)",
             Self::Copilot => "GitHub Copilot",
@@ -80,8 +82,8 @@ impl ProviderId {
     #[must_use]
     pub fn all() -> &'static [Self] {
         &[
-            Self::Claude,
-            Self::Codex,
+            Self::Anthropic,
+            Self::OpenAI,
             Self::Gemini,
             Self::Kiro,
             Self::Copilot,
@@ -109,8 +111,8 @@ mod tests {
 
     #[test]
     fn test_display() {
-        assert_eq!(ProviderId::Claude.to_string(), "claude");
-        assert_eq!(ProviderId::Codex.to_string(), "codex");
+        assert_eq!(ProviderId::Anthropic.to_string(), "anthropic");
+        assert_eq!(ProviderId::OpenAI.to_string(), "openai");
         assert_eq!(ProviderId::Gemini.to_string(), "gemini");
         assert_eq!(ProviderId::Kiro.to_string(), "kiro");
         assert_eq!(ProviderId::Copilot.to_string(), "copilot");
@@ -122,8 +124,11 @@ mod tests {
 
     #[test]
     fn test_from_str_canonical() {
-        assert_eq!(ProviderId::from_str("claude").unwrap(), ProviderId::Claude);
-        assert_eq!(ProviderId::from_str("codex").unwrap(), ProviderId::Codex);
+        assert_eq!(
+            ProviderId::from_str("anthropic").unwrap(),
+            ProviderId::Anthropic
+        );
+        assert_eq!(ProviderId::from_str("openai").unwrap(), ProviderId::OpenAI);
         assert_eq!(ProviderId::from_str("gemini").unwrap(), ProviderId::Gemini);
         assert_eq!(ProviderId::from_str("kiro").unwrap(), ProviderId::Kiro);
         assert_eq!(
@@ -141,11 +146,6 @@ mod tests {
 
     #[test]
     fn test_from_str_aliases() {
-        assert_eq!(
-            ProviderId::from_str("anthropic").unwrap(),
-            ProviderId::Claude
-        );
-        assert_eq!(ProviderId::from_str("openai").unwrap(), ProviderId::Codex);
         assert_eq!(ProviderId::from_str("google").unwrap(), ProviderId::Gemini);
         assert_eq!(ProviderId::from_str("github").unwrap(), ProviderId::Copilot);
         assert_eq!(ProviderId::from_str("alibaba").unwrap(), ProviderId::Qwen);
@@ -163,8 +163,8 @@ mod tests {
     #[test]
     fn test_serde_roundtrip() {
         for p in [
-            ProviderId::Claude,
-            ProviderId::Codex,
+            ProviderId::Anthropic,
+            ProviderId::OpenAI,
             ProviderId::Gemini,
             ProviderId::Kiro,
             ProviderId::Copilot,
@@ -183,8 +183,8 @@ mod tests {
     fn test_hash_in_map() {
         use std::collections::HashMap;
         let mut map = HashMap::new();
-        map.insert(ProviderId::Claude, "val");
-        assert_eq!(map[&ProviderId::Claude], "val");
+        map.insert(ProviderId::Anthropic, "val");
+        assert_eq!(map[&ProviderId::Anthropic], "val");
     }
 
     #[test]

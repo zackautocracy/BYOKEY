@@ -7,13 +7,15 @@
 //!
 //! * **OAuth token** (Codex CLI PKCE flow) — private Codex Responses API at
 //!   `chatgpt.com/backend-api/codex/responses`.  Request translated with
-//!   [`OpenAIToCodex`]; response parsed from SSE and translated with
-//!   [`CodexToOpenAI`].
+//!   [`OpenAIToOpenAINative`]; response parsed from SSE and translated with
+//!   [`OpenAINativeToOpenAI`].
+
+pub mod quota;
 use crate::http_util::ProviderHttp;
 use crate::registry;
 use async_trait::async_trait;
 use byokey_auth::AuthManager;
-use byokey_translate::{CodexToOpenAI, OpenAIToCodex};
+use byokey_translate::{OpenAINativeToOpenAI, OpenAIToOpenAINative};
 use byokey_types::{
     ByokError, ChatRequest, ProviderId, RateLimitStore,
     traits::{
@@ -37,28 +39,30 @@ const CODEX_BASE_URL: &str = "https://chatgpt.com/backend-api/codex";
 const CODEX_VERSION: &str = "0.101.0";
 
 /// User-Agent matching the Codex CLI binary.
-const CODEX_USER_AGENT: &str = "codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464";
+pub(super) const CODEX_USER_AGENT: &str = "codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464";
 
 /// Executor for the `OpenAI` (Codex) API.
-pub struct CodexExecutor {
+pub struct OpenAiExecutor {
     ph: ProviderHttp,
     api_key: Option<String>,
+    account_id: Option<String>,
     auth: Arc<AuthManager>,
 }
 
-impl CodexExecutor {
+impl OpenAiExecutor {
     /// Creates a new Codex executor with an optional API key and auth manager.
     pub fn new(
         http: Client,
         api_key: Option<String>,
+        account_id: Option<String>,
         auth: Arc<AuthManager>,
         ratelimit: Option<Arc<RateLimitStore>>,
     ) -> Self {
         let mut ph = ProviderHttp::new(http);
         if let Some(store) = ratelimit {
-            ph = ph.with_ratelimit(store, ProviderId::Codex);
+            ph = ph.with_ratelimit(store, ProviderId::OpenAI);
         }
-        Self { ph, api_key, auth }
+        Self { ph, api_key, account_id, auth }
     }
 
     /// Returns `(token, is_oauth)`.  `is_oauth = true` when the token came
@@ -67,7 +71,10 @@ impl CodexExecutor {
         if let Some(key) = &self.api_key {
             return Ok((key.clone(), false));
         }
-        let tok = self.auth.get_token(&ProviderId::Codex).await?;
+        let tok = match &self.account_id {
+            Some(id) => self.auth.get_token_for(&ProviderId::OpenAI, id).await?,
+            None => self.auth.get_token(&ProviderId::OpenAI).await?,
+        };
         Ok((tok.access_token, true))
     }
 
@@ -96,7 +103,7 @@ impl CodexExecutor {
     /// Translates an `OpenAI` Chat request, sends it to the Codex Responses
     /// API, and returns a streaming `ByteStream` of `OpenAI`-format SSE events.
     async fn codex_stream(&self, body: Value, token: &str) -> Result<ProviderResponse> {
-        let mut codex_body = OpenAIToCodex.translate_request(body)?;
+        let mut codex_body = OpenAIToOpenAINative.translate_request(body)?;
         codex_body["stream"] = Value::Bool(true);
 
         let resp = self.codex_request(&codex_body, token).await?;
@@ -111,7 +118,7 @@ impl CodexExecutor {
     /// Like [`codex_stream`] but collects the full SSE response and extracts
     /// the completed OpenAI-format `Value`.
     async fn codex_complete(&self, body: Value, token: &str) -> Result<ProviderResponse> {
-        let mut codex_body = OpenAIToCodex.translate_request(body)?;
+        let mut codex_body = OpenAIToOpenAINative.translate_request(body)?;
         codex_body["stream"] = Value::Bool(true); // Codex always streams
 
         let resp = self.codex_request(&codex_body, token).await?;
@@ -129,7 +136,7 @@ impl CodexExecutor {
                 && ev["type"].as_str() == Some("response.completed")
             {
                 let response = ev["response"].clone();
-                let translated = CodexToOpenAI.translate_response(response)?;
+                let translated = OpenAINativeToOpenAI.translate_response(response)?;
                 return Ok(ProviderResponse::Complete(translated));
             }
         }
@@ -295,7 +302,7 @@ fn translate_codex_sse(inner: ByteStream, model: String) -> ByteStream {
 }
 
 #[async_trait]
-impl ProviderExecutor for CodexExecutor {
+impl ProviderExecutor for OpenAiExecutor {
     async fn chat_completion(&self, request: ChatRequest) -> Result<ProviderResponse> {
         let (token, is_oauth) = self.token().await?;
         let stream = request.stream;
@@ -322,7 +329,7 @@ impl ProviderExecutor for CodexExecutor {
     }
 
     fn supported_models(&self) -> Vec<String> {
-        registry::models_for_provider(&ProviderId::Codex)
+        registry::models_for_provider(&ProviderId::OpenAI)
     }
 }
 
@@ -331,10 +338,10 @@ mod tests {
     use super::*;
     use byokey_store::InMemoryTokenStore;
 
-    fn make_executor() -> CodexExecutor {
+    fn make_executor() -> OpenAiExecutor {
         let store = Arc::new(InMemoryTokenStore::new());
         let auth = Arc::new(AuthManager::new(store, rquest::Client::new()));
-        CodexExecutor::new(Client::new(), None, auth, None)
+        OpenAiExecutor::new(Client::new(), None, None, auth, None)
     }
 
     #[test]

@@ -287,8 +287,8 @@ mod tests {
     async fn test_save_and_load() {
         let s = mem().await;
         let tok = OAuthToken::new("access").with_refresh("refresh");
-        s.save(&ProviderId::Claude, &tok).await.unwrap();
-        let loaded = s.load(&ProviderId::Claude).await.unwrap().unwrap();
+        s.save(&ProviderId::Anthropic, &tok).await.unwrap();
+        let loaded = s.load(&ProviderId::Anthropic).await.unwrap().unwrap();
         assert_eq!(loaded.access_token, "access");
         assert_eq!(loaded.refresh_token, Some("refresh".into()));
     }
@@ -302,24 +302,24 @@ mod tests {
     #[tokio::test]
     async fn test_remove() {
         let s = mem().await;
-        s.save(&ProviderId::Codex, &OAuthToken::new("tok"))
+        s.save(&ProviderId::OpenAI, &OAuthToken::new("tok"))
             .await
             .unwrap();
-        s.remove(&ProviderId::Codex).await.unwrap();
-        assert!(s.load(&ProviderId::Codex).await.unwrap().is_none());
+        s.remove(&ProviderId::OpenAI).await.unwrap();
+        assert!(s.load(&ProviderId::OpenAI).await.unwrap().is_none());
     }
 
     #[tokio::test]
     async fn test_upsert() {
         let s = mem().await;
-        s.save(&ProviderId::Claude, &OAuthToken::new("first"))
+        s.save(&ProviderId::Anthropic, &OAuthToken::new("first"))
             .await
             .unwrap();
-        s.save(&ProviderId::Claude, &OAuthToken::new("second"))
+        s.save(&ProviderId::Anthropic, &OAuthToken::new("second"))
             .await
             .unwrap();
         assert_eq!(
-            s.load(&ProviderId::Claude)
+            s.load(&ProviderId::Anthropic)
                 .await
                 .unwrap()
                 .unwrap()
@@ -331,14 +331,14 @@ mod tests {
     #[tokio::test]
     async fn test_multiple_providers() {
         let s = mem().await;
-        s.save(&ProviderId::Claude, &OAuthToken::new("c"))
+        s.save(&ProviderId::Anthropic, &OAuthToken::new("c"))
             .await
             .unwrap();
         s.save(&ProviderId::Gemini, &OAuthToken::new("g"))
             .await
             .unwrap();
         assert_eq!(
-            s.load(&ProviderId::Claude)
+            s.load(&ProviderId::Anthropic)
                 .await
                 .unwrap()
                 .unwrap()
@@ -370,11 +370,11 @@ mod tests {
     async fn test_save_and_load_account() {
         let s = mem().await;
         let tok = OAuthToken::new("work-token");
-        s.save_account(&ProviderId::Claude, "work", Some("Work Account"), &tok)
+        s.save_account(&ProviderId::Anthropic, "work", Some("Work Account"), &tok)
             .await
             .unwrap();
         let loaded = s
-            .load_account(&ProviderId::Claude, "work")
+            .load_account(&ProviderId::Anthropic, "work")
             .await
             .unwrap()
             .unwrap();
@@ -384,22 +384,22 @@ mod tests {
     #[tokio::test]
     async fn test_first_account_becomes_active() {
         let s = mem().await;
-        s.save_account(&ProviderId::Claude, "first", None, &OAuthToken::new("tok1"))
+        s.save_account(&ProviderId::Anthropic, "first", None, &OAuthToken::new("tok1"))
             .await
             .unwrap();
         // First account should be active and loadable via `load()`.
-        let loaded = s.load(&ProviderId::Claude).await.unwrap().unwrap();
+        let loaded = s.load(&ProviderId::Anthropic).await.unwrap().unwrap();
         assert_eq!(loaded.access_token, "tok1");
     }
 
     #[tokio::test]
     async fn test_second_account_not_active() {
         let s = mem().await;
-        s.save_account(&ProviderId::Claude, "first", None, &OAuthToken::new("tok1"))
+        s.save_account(&ProviderId::Anthropic, "first", None, &OAuthToken::new("tok1"))
             .await
             .unwrap();
         s.save_account(
-            &ProviderId::Claude,
+            &ProviderId::Anthropic,
             "second",
             None,
             &OAuthToken::new("tok2"),
@@ -407,28 +407,28 @@ mod tests {
         .await
         .unwrap();
         // `load()` returns the active one (first).
-        let loaded = s.load(&ProviderId::Claude).await.unwrap().unwrap();
+        let loaded = s.load(&ProviderId::Anthropic).await.unwrap().unwrap();
         assert_eq!(loaded.access_token, "tok1");
     }
 
     #[tokio::test]
     async fn test_set_active() {
         let s = mem().await;
-        s.save_account(&ProviderId::Claude, "a", None, &OAuthToken::new("tok-a"))
+        s.save_account(&ProviderId::Anthropic, "a", None, &OAuthToken::new("tok-a"))
             .await
             .unwrap();
-        s.save_account(&ProviderId::Claude, "b", None, &OAuthToken::new("tok-b"))
+        s.save_account(&ProviderId::Anthropic, "b", None, &OAuthToken::new("tok-b"))
             .await
             .unwrap();
-        s.set_active(&ProviderId::Claude, "b").await.unwrap();
-        let loaded = s.load(&ProviderId::Claude).await.unwrap().unwrap();
+        s.set_active(&ProviderId::Anthropic, "b").await.unwrap();
+        let loaded = s.load(&ProviderId::Anthropic).await.unwrap().unwrap();
         assert_eq!(loaded.access_token, "tok-b");
     }
 
     #[tokio::test]
     async fn test_set_active_nonexistent() {
         let s = mem().await;
-        let err = s.set_active(&ProviderId::Claude, "nope").await.unwrap_err();
+        let err = s.set_active(&ProviderId::Anthropic, "nope").await.unwrap_err();
         assert!(err.to_string().contains("not found"));
     }
 
@@ -436,7 +436,7 @@ mod tests {
     async fn test_list_accounts() {
         let s = mem().await;
         s.save_account(
-            &ProviderId::Claude,
+            &ProviderId::Anthropic,
             "work",
             Some("Work"),
             &OAuthToken::new("w"),
@@ -444,7 +444,7 @@ mod tests {
         .await
         .unwrap();
         s.save_account(
-            &ProviderId::Claude,
+            &ProviderId::Anthropic,
             "personal",
             Some("Personal"),
             &OAuthToken::new("p"),
@@ -452,7 +452,7 @@ mod tests {
         .await
         .unwrap();
 
-        let accounts = s.list_accounts(&ProviderId::Claude).await.unwrap();
+        let accounts = s.list_accounts(&ProviderId::Anthropic).await.unwrap();
         assert_eq!(accounts.len(), 2);
         // First is active.
         assert!(accounts[0].is_active);
@@ -463,14 +463,14 @@ mod tests {
     #[tokio::test]
     async fn test_load_all_tokens() {
         let s = mem().await;
-        s.save_account(&ProviderId::Claude, "a", None, &OAuthToken::new("tok-a"))
+        s.save_account(&ProviderId::Anthropic, "a", None, &OAuthToken::new("tok-a"))
             .await
             .unwrap();
-        s.save_account(&ProviderId::Claude, "b", None, &OAuthToken::new("tok-b"))
+        s.save_account(&ProviderId::Anthropic, "b", None, &OAuthToken::new("tok-b"))
             .await
             .unwrap();
 
-        let all = s.load_all_tokens(&ProviderId::Claude).await.unwrap();
+        let all = s.load_all_tokens(&ProviderId::Anthropic).await.unwrap();
         assert_eq!(all.len(), 2);
         // Active account comes first.
         assert_eq!(all[0].0, "a");
@@ -479,12 +479,12 @@ mod tests {
     #[tokio::test]
     async fn test_remove_account() {
         let s = mem().await;
-        s.save_account(&ProviderId::Claude, "work", None, &OAuthToken::new("w"))
+        s.save_account(&ProviderId::Anthropic, "work", None, &OAuthToken::new("w"))
             .await
             .unwrap();
-        s.remove_account(&ProviderId::Claude, "work").await.unwrap();
+        s.remove_account(&ProviderId::Anthropic, "work").await.unwrap();
         assert!(
-            s.load_account(&ProviderId::Claude, "work")
+            s.load_account(&ProviderId::Anthropic, "work")
                 .await
                 .unwrap()
                 .is_none()

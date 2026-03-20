@@ -6,6 +6,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_cooldown() -> u64 {
+    30
+}
+
 /// Configuration for a single API key entry within a provider.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiKeyEntry {
@@ -14,6 +18,43 @@ pub struct ApiKeyEntry {
     /// Optional label for identification in logs.
     #[serde(default)]
     pub label: Option<String>,
+}
+
+/// A single entry in a provider's credential routing chain.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RoutingEntry {
+    /// Which provider supplies the credentials.
+    pub provider: ProviderId,
+    /// Credential source type.
+    pub source: CredentialSourceKind,
+    /// Selection strategy within this source (defaults to `round_robin`).
+    #[serde(default)]
+    pub strategy: BalancingStrategy,
+}
+
+/// The type of credential source in a routing entry.
+///
+/// Named `CredentialSourceKind` (not `CredentialSource`) to avoid collision with
+/// the `CredentialSource` trait in `crates/provider/src/credentials/mod.rs`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CredentialSourceKind {
+    #[serde(rename = "oauth")]
+    OAuth,
+    ApiKeys,
+}
+
+/// How credentials are selected within a source.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BalancingStrategy {
+    /// Use first available credential. Switch only on cooldown. (Default)
+    #[default]
+    Failover,
+    /// True per-request rotation across credentials.
+    RoundRobin,
+    /// Sticky selection based on quota usage. Falls back to `failover` for `api_keys`.
+    QuotaAware,
 }
 
 /// Configuration for a single provider.
@@ -28,13 +69,13 @@ pub struct ProviderConfig {
     /// Whether this provider is enabled (defaults to `true`).
     #[serde(default = "default_true")]
     pub enabled: bool,
-    /// Always route requests to this provider instead (e.g. `backend: copilot`
-    /// lets Gemini requests go through GitHub Copilot).
+    /// Cooldown duration in seconds after a rate limit/retryable error.
+    #[serde(default = "default_cooldown")]
+    pub cooldown_seconds: u64,
+    /// Ordered credential routing chain. If empty, auto-generated from
+    /// available credentials (`api_keys` first, then oauth with `round_robin`).
     #[serde(default)]
-    pub backend: Option<ProviderId>,
-    /// Fallback provider to use when the primary provider fails.
-    #[serde(default)]
-    pub fallback: Option<ProviderId>,
+    pub routing: Vec<RoutingEntry>,
 }
 
 impl Default for ProviderConfig {
@@ -43,8 +84,8 @@ impl Default for ProviderConfig {
             api_key: None,
             api_keys: Vec::new(),
             enabled: true,
-            backend: None,
-            fallback: None,
+            cooldown_seconds: 30,
+            routing: Vec::new(),
         }
     }
 }
@@ -447,10 +488,10 @@ mod tests {
 port: 9000
 host: "0.0.0.0"
 providers:
-  claude:
+  anthropic:
     api_key: "sk-ant-test"
     enabled: true
-  codex:
+  openai:
     enabled: false
 "#;
 
@@ -472,7 +513,7 @@ providers:
     #[test]
     fn test_from_yaml_provider_api_key() {
         let c = Config::from_yaml(SAMPLE_YAML).unwrap();
-        let claude = c.providers.get(&ProviderId::Claude).unwrap();
+        let claude = c.providers.get(&ProviderId::Anthropic).unwrap();
         assert_eq!(claude.api_key.as_deref(), Some("sk-ant-test"));
         assert!(claude.enabled);
     }
@@ -480,7 +521,7 @@ providers:
     #[test]
     fn test_from_yaml_provider_disabled() {
         let c = Config::from_yaml(SAMPLE_YAML).unwrap();
-        let codex = c.providers.get(&ProviderId::Codex).unwrap();
+        let codex = c.providers.get(&ProviderId::OpenAI).unwrap();
         assert!(!codex.enabled);
         assert!(codex.api_key.is_none());
     }
@@ -522,50 +563,34 @@ amp:
     }
 
     #[test]
-    fn test_provider_config_backend_fallback_default_none() {
-        let pc = ProviderConfig::default();
-        assert!(pc.backend.is_none());
-        assert!(pc.fallback.is_none());
-    }
-
-    #[test]
-    fn test_from_yaml_backend_copilot() {
+    fn test_removed_fields_ignored() {
+        // Old config files may still have these fields — they should be silently ignored.
         let yaml = r"
 providers:
-  gemini:
+  openai:
+    api_key: sk-test
+    fallback: copilot
+    oauth_balancing_strategy: quota_aware
+    credential_priority: oauth
     backend: copilot
 ";
         let c = Config::from_yaml(yaml).unwrap();
-        let gemini = c.providers.get(&ProviderId::Gemini).unwrap();
-        assert_eq!(gemini.backend, Some(ProviderId::Copilot));
-        assert!(gemini.fallback.is_none());
-    }
-
-    #[test]
-    fn test_from_yaml_fallback_copilot() {
-        let yaml = r"
-providers:
-  gemini:
-    fallback: copilot
-";
-        let c = Config::from_yaml(yaml).unwrap();
-        let gemini = c.providers.get(&ProviderId::Gemini).unwrap();
-        assert!(gemini.backend.is_none());
-        assert_eq!(gemini.fallback, Some(ProviderId::Copilot));
+        let codex = c.providers.get(&ProviderId::OpenAI).unwrap();
+        assert_eq!(codex.api_key.as_deref(), Some("sk-test"));
     }
 
     #[test]
     fn test_from_yaml_api_keys() {
         let yaml = r#"
 providers:
-  claude:
+  anthropic:
     api_keys:
       - api_key: "sk-key1"
         label: "team-a"
       - api_key: "sk-key2"
 "#;
         let c = Config::from_yaml(yaml).unwrap();
-        let claude = c.providers.get(&ProviderId::Claude).unwrap();
+        let claude = c.providers.get(&ProviderId::Anthropic).unwrap();
         assert_eq!(claude.api_keys.len(), 2);
         assert_eq!(claude.api_keys[0].api_key, "sk-key1");
         assert_eq!(claude.api_keys[0].label.as_deref(), Some("team-a"));
@@ -603,7 +628,7 @@ providers:
     fn test_from_yaml_model_alias() {
         let yaml = r#"
 model_alias:
-  claude:
+  anthropic:
     - name: "claude-sonnet-4-5-20250929"
       alias: "cs4.5"
       fork: true
@@ -611,7 +636,7 @@ model_alias:
       alias: "co4.5"
 "#;
         let c = Config::from_yaml(yaml).unwrap();
-        let aliases = c.model_alias.get(&ProviderId::Claude).unwrap();
+        let aliases = c.model_alias.get(&ProviderId::Anthropic).unwrap();
         assert_eq!(aliases.len(), 2);
         assert_eq!(aliases[0].alias, "cs4.5");
         assert!(aliases[0].fork);
@@ -623,12 +648,12 @@ model_alias:
     fn test_from_yaml_excluded_models() {
         let yaml = r#"
 excluded_models:
-  claude:
+  anthropic:
     - "claude-3-*"
     - "*-thinking"
 "#;
         let c = Config::from_yaml(yaml).unwrap();
-        let excluded = c.excluded_models.get(&ProviderId::Claude).unwrap();
+        let excluded = c.excluded_models.get(&ProviderId::Anthropic).unwrap();
         assert_eq!(excluded.len(), 2);
     }
 
@@ -636,7 +661,7 @@ excluded_models:
     fn test_resolve_alias() {
         let yaml = r#"
 model_alias:
-  claude:
+  anthropic:
     - name: "claude-sonnet-4-5-20250929"
       alias: "cs4.5"
 "#;
@@ -649,14 +674,14 @@ model_alias:
     fn test_is_model_excluded() {
         let yaml = r#"
 excluded_models:
-  claude:
+  anthropic:
     - "claude-3-*"
     - "*-thinking"
 "#;
         let c = Config::from_yaml(yaml).unwrap();
-        assert!(c.is_model_excluded(&ProviderId::Claude, "claude-3-opus"));
-        assert!(c.is_model_excluded(&ProviderId::Claude, "anything-thinking"));
-        assert!(!c.is_model_excluded(&ProviderId::Claude, "claude-opus-4-5"));
+        assert!(c.is_model_excluded(&ProviderId::Anthropic, "claude-3-opus"));
+        assert!(c.is_model_excluded(&ProviderId::Anthropic, "anything-thinking"));
+        assert!(!c.is_model_excluded(&ProviderId::Anthropic, "claude-opus-4-5"));
         assert!(!c.is_model_excluded(&ProviderId::Gemini, "claude-3-opus"));
     }
 
@@ -921,5 +946,120 @@ log:
         assert_eq!(c.log.format, "json");
         assert_eq!(c.log.file.as_deref(), Some("/tmp/byokey.log"));
         assert_eq!(c.log.level, "debug");
+    }
+
+    #[test]
+    fn test_provider_config_default_cooldown() {
+        let pc = ProviderConfig::default();
+        assert_eq!(pc.cooldown_seconds, 30);
+    }
+
+    #[test]
+    fn test_routing_entry_parsing() {
+        let yaml = r"
+providers:
+  openai:
+    routing:
+      - provider: openai
+        source: oauth
+        strategy: quota_aware
+      - provider: copilot
+        source: api_keys
+        strategy: round_robin
+";
+        let c = Config::from_yaml(yaml).unwrap();
+        let codex = c.providers.get(&ProviderId::OpenAI).unwrap();
+        assert_eq!(codex.routing.len(), 2);
+        assert_eq!(codex.routing[0].provider, ProviderId::OpenAI);
+        assert_eq!(codex.routing[0].source, CredentialSourceKind::OAuth);
+        assert_eq!(codex.routing[0].strategy, BalancingStrategy::QuotaAware);
+        assert_eq!(codex.routing[1].provider, ProviderId::Copilot);
+        assert_eq!(codex.routing[1].source, CredentialSourceKind::ApiKeys);
+        assert_eq!(codex.routing[1].strategy, BalancingStrategy::RoundRobin);
+    }
+
+    #[test]
+    fn test_routing_entry_defaults() {
+        let yaml = r"
+providers:
+  openai:
+    routing:
+      - provider: openai
+        source: oauth
+";
+        let c = Config::from_yaml(yaml).unwrap();
+        let codex = c.providers.get(&ProviderId::OpenAI).unwrap();
+        assert_eq!(codex.routing[0].strategy, BalancingStrategy::Failover);
+    }
+
+    #[test]
+    fn test_empty_routing_default() {
+        let yaml = r"
+providers:
+  openai:
+    api_key: sk-test
+";
+        let c = Config::from_yaml(yaml).unwrap();
+        let codex = c.providers.get(&ProviderId::OpenAI).unwrap();
+        assert!(codex.routing.is_empty());
+    }
+
+    #[test]
+    fn test_routing_mixed_entries() {
+        let yaml = r"
+providers:
+  openai:
+    routing:
+      - provider: openai
+        source: oauth
+        strategy: quota_aware
+      - provider: copilot
+        source: oauth
+        strategy: round_robin
+      - provider: openai
+        source: api_keys
+";
+        let c = Config::from_yaml(yaml).unwrap();
+        let codex = c.providers.get(&ProviderId::OpenAI).unwrap();
+        assert_eq!(codex.routing.len(), 3);
+        assert_eq!(codex.routing[0].source, CredentialSourceKind::OAuth);
+        assert_eq!(codex.routing[1].source, CredentialSourceKind::OAuth);
+        assert_eq!(codex.routing[2].source, CredentialSourceKind::ApiKeys);
+    }
+
+    #[test]
+    fn test_balancing_strategy_failover_default() {
+        let strategy = BalancingStrategy::default();
+        assert_eq!(strategy, BalancingStrategy::Failover);
+    }
+
+    #[test]
+    fn test_balancing_strategy_failover_serde() {
+        let yaml = r"
+providers:
+  openai:
+    routing:
+      - provider: openai
+        source: oauth
+        strategy: failover
+";
+        let c = Config::from_yaml(yaml).unwrap();
+        let codex = c.providers.get(&ProviderId::OpenAI).unwrap();
+        assert_eq!(codex.routing[0].strategy, BalancingStrategy::Failover);
+    }
+
+    #[test]
+    fn test_balancing_strategy_round_robin_serde() {
+        let yaml = r"
+providers:
+  openai:
+    routing:
+      - provider: openai
+        source: oauth
+        strategy: round_robin
+";
+        let c = Config::from_yaml(yaml).unwrap();
+        let codex = c.providers.get(&ProviderId::OpenAI).unwrap();
+        assert_eq!(codex.routing[0].strategy, BalancingStrategy::RoundRobin);
     }
 }

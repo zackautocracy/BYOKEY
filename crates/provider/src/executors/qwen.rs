@@ -20,6 +20,7 @@ const API_URL: &str = "https://portal.qwen.ai/v1/chat/completions";
 pub struct QwenExecutor {
     ph: ProviderHttp,
     api_key: Option<String>,
+    account_id: Option<String>,
     auth: Arc<AuthManager>,
 }
 
@@ -28,6 +29,7 @@ impl QwenExecutor {
     pub fn new(
         http: Client,
         api_key: Option<String>,
+        account_id: Option<String>,
         auth: Arc<AuthManager>,
         ratelimit: Option<Arc<RateLimitStore>>,
     ) -> Self {
@@ -35,7 +37,7 @@ impl QwenExecutor {
         if let Some(store) = ratelimit {
             ph = ph.with_ratelimit(store, ProviderId::Qwen);
         }
-        Self { ph, api_key, auth }
+        Self { ph, api_key, account_id, auth }
     }
 
     /// Returns the Bearer token: API key if configured, otherwise OAuth access token.
@@ -43,7 +45,10 @@ impl QwenExecutor {
         if let Some(key) = &self.api_key {
             return Ok(key.clone());
         }
-        let token = self.auth.get_token(&ProviderId::Qwen).await?;
+        let token = match &self.account_id {
+            Some(id) => self.auth.get_token_for(&ProviderId::Qwen, id).await?,
+            None => self.auth.get_token(&ProviderId::Qwen).await?,
+        };
         Ok(token.access_token)
     }
 }
@@ -100,7 +105,7 @@ mod tests {
     fn make_executor() -> QwenExecutor {
         let store = Arc::new(InMemoryTokenStore::new());
         let auth = Arc::new(AuthManager::new(store, rquest::Client::new()));
-        QwenExecutor::new(Client::new(), None, auth, None)
+        QwenExecutor::new(Client::new(), None, None, auth, None)
     }
 
     #[test]

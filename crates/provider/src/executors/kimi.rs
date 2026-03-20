@@ -23,6 +23,7 @@ const API_URL: &str = "https://api.kimi.com/coding/v1/chat/completions";
 pub struct KimiExecutor {
     ph: ProviderHttp,
     api_key: Option<String>,
+    account_id: Option<String>,
     auth: Arc<AuthManager>,
     device_id: String,
 }
@@ -32,6 +33,7 @@ impl KimiExecutor {
     pub fn new(
         http: Client,
         api_key: Option<String>,
+        account_id: Option<String>,
         auth: Arc<AuthManager>,
         ratelimit: Option<Arc<RateLimitStore>>,
     ) -> Self {
@@ -42,6 +44,7 @@ impl KimiExecutor {
         Self {
             ph,
             api_key,
+            account_id,
             auth,
             device_id: byokey_auth::kimi::device_id(),
         }
@@ -52,7 +55,10 @@ impl KimiExecutor {
         if let Some(key) = &self.api_key {
             return Ok(key.clone());
         }
-        let token = self.auth.get_token(&ProviderId::Kimi).await?;
+        let token = match &self.account_id {
+            Some(id) => self.auth.get_token_for(&ProviderId::Kimi, id).await?,
+            None => self.auth.get_token(&ProviderId::Kimi).await?,
+        };
         Ok(token.access_token)
     }
 }
@@ -116,7 +122,7 @@ mod tests {
     fn make_executor() -> KimiExecutor {
         let store = Arc::new(InMemoryTokenStore::new());
         let auth = Arc::new(AuthManager::new(store, rquest::Client::new()));
-        KimiExecutor::new(Client::new(), None, auth, None)
+        KimiExecutor::new(Client::new(), None, None, auth, None)
     }
 
     #[test]

@@ -119,6 +119,15 @@ pub trait ResponseTranslator: Send + Sync {
     fn translate_response(&self, res: Value) -> Result<Value>;
 }
 
+/// API wire format for native endpoint passthrough.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ApiFormat {
+    /// `OpenAI` chat completions format (`/v1/chat/completions`).
+    OpenAI,
+    /// Anthropic messages format (`/v1/messages`).
+    Anthropic,
+}
+
 /// The response produced by a [`ProviderExecutor`].
 pub enum ProviderResponse {
     /// A complete, non-streaming JSON response.
@@ -134,4 +143,19 @@ pub trait ProviderExecutor: Send + Sync {
     async fn chat_completion(&self, request: ChatRequest) -> Result<ProviderResponse>;
     /// List the model identifiers supported by this provider.
     fn supported_models(&self) -> Vec<String>;
+
+    /// Forward a raw request in a specific API format.
+    ///
+    /// The body contains the full request (model, messages, params).
+    /// Default: returns `UnsupportedModel`.
+    async fn forward_request(
+        &self,
+        _format: ApiFormat,
+        _body: Value,
+        _stream: bool,
+    ) -> Result<ProviderResponse> {
+        Err(crate::ByokError::UnsupportedModel(
+            "format not supported by this executor".into(),
+        ))
+    }
 }

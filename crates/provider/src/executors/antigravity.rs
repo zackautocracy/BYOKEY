@@ -29,6 +29,7 @@ const FALLBACK_URL: &str = "https://daily-cloudcode-pa.sandbox.googleapis.com";
 pub struct AntigravityExecutor {
     ph: ProviderHttp,
     api_key: Option<String>,
+    account_id: Option<String>,
     auth: Arc<AuthManager>,
 }
 
@@ -37,6 +38,7 @@ impl AntigravityExecutor {
     pub fn new(
         http: Client,
         api_key: Option<String>,
+        account_id: Option<String>,
         auth: Arc<AuthManager>,
         ratelimit: Option<Arc<RateLimitStore>>,
     ) -> Self {
@@ -44,7 +46,7 @@ impl AntigravityExecutor {
         if let Some(store) = ratelimit {
             ph = ph.with_ratelimit(store, ProviderId::Antigravity);
         }
-        Self { ph, api_key, auth }
+        Self { ph, api_key, account_id, auth }
     }
 
     /// Returns the bearer token: API key if present, otherwise fetches an OAuth token.
@@ -52,7 +54,10 @@ impl AntigravityExecutor {
         if let Some(key) = &self.api_key {
             return Ok(key.clone());
         }
-        let token = self.auth.get_token(&ProviderId::Antigravity).await?;
+        let token = match &self.account_id {
+            Some(id) => self.auth.get_token_for(&ProviderId::Antigravity, id).await?,
+            None => self.auth.get_token(&ProviderId::Antigravity).await?,
+        };
         Ok(token.access_token)
     }
 
@@ -126,13 +131,6 @@ fn wrap_request(model: &str, gemini_body: &mut Value) -> Value {
         "requestType": "agent",
         "request": gemini_body,
     })
-}
-
-/// Extracts the actual model name from an `ag-` prefixed model identifier.
-///
-/// e.g. `ag-gemini-2.5-pro` -> `gemini-2.5-pro`, `ag-claude-sonnet-4-5` -> `claude-sonnet-4-5`
-fn strip_ag_prefix(model: &str) -> &str {
-    model.strip_prefix("ag-").unwrap_or(model)
 }
 
 /// Converts a single Gemini streaming chunk (from within the Antigravity envelope)
@@ -213,11 +211,12 @@ impl ProviderExecutor for AntigravityExecutor {
         let stream = request.stream;
         let body = request.into_body();
 
-        // Extract model from request, strip ag- prefix for the actual API call
-        let model = body.get("model").and_then(Value::as_str).map_or_else(
-            || "gemini-2.5-pro".to_string(),
-            |m| strip_ag_prefix(m).to_string(),
-        );
+        // Extract model from request (already canonical via proxy normalization)
+        let model = body
+            .get("model")
+            .and_then(Value::as_str)
+            .unwrap_or("gemini-2.5-pro")
+            .to_string();
 
         // Translate OpenAI -> Gemini format
         let mut gemini_body = OpenAIToGemini.translate_request(body)?;
@@ -297,7 +296,7 @@ mod tests {
     fn make_executor() -> AntigravityExecutor {
         let store = Arc::new(InMemoryTokenStore::new());
         let auth = Arc::new(AuthManager::new(store, rquest::Client::new()));
-        AntigravityExecutor::new(Client::new(), None, auth, None)
+        AntigravityExecutor::new(Client::new(), None, None, auth, None)
     }
 
     #[test]
@@ -307,23 +306,12 @@ mod tests {
     }
 
     #[test]
-    fn test_supported_models_start_with_ag() {
+    fn test_supported_models_include_antigravity() {
         let ex = make_executor();
-        // Most Antigravity models are prefixed with "ag-", but shared models
-        // like "claude-sonnet-4-5" also appear via REGISTRY.
-        let ag_only: Vec<_> = ex
-            .supported_models()
-            .into_iter()
-            .filter(|m| m.starts_with("ag-"))
-            .collect();
-        assert!(!ag_only.is_empty());
-    }
-
-    #[test]
-    fn test_strip_ag_prefix() {
-        assert_eq!(strip_ag_prefix("ag-gemini-2.5-pro"), "gemini-2.5-pro");
-        assert_eq!(strip_ag_prefix("ag-claude-sonnet-4-5"), "claude-sonnet-4-5");
-        assert_eq!(strip_ag_prefix("gemini-2.5-pro"), "gemini-2.5-pro");
+        let models = ex.supported_models();
+        // Antigravity models use canonical names (no ag- prefix).
+        assert!(!models.is_empty());
+        assert!(models.iter().any(|m| m.contains("gemini")));
     }
 
     #[test]

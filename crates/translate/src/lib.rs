@@ -1,29 +1,29 @@
 //! Request and response translators between LLM API formats.
 //!
-//! This crate provides bidirectional translation between `OpenAI`, Claude, Gemini,
-//! and Codex (`OpenAI` Responses API) message formats. All translators are pure functions
+//! This crate provides bidirectional translation between OpenAI, Anthropic, Gemini,
+//! and OpenAI Native (Responses API) message formats. All translators are pure functions
 //! with no I/O.
 
 pub mod cache_control;
-pub mod claude_to_openai;
-pub mod codex_to_openai;
+pub mod anthropic_to_openai;
+pub mod openai_native_to_openai;
 pub mod gemini_native_to_openai;
 pub mod gemini_to_openai;
 pub mod merge_messages;
-pub mod openai_to_claude;
-pub mod openai_to_codex;
+pub mod openai_to_anthropic;
+pub mod openai_to_openai_native;
 pub mod openai_to_gemini;
 pub mod openai_to_gemini_native;
 pub mod thinking;
 
 pub use cache_control::inject_cache_control;
-pub use claude_to_openai::ClaudeToOpenAI;
-pub use codex_to_openai::CodexToOpenAI;
+pub use anthropic_to_openai::AnthropicToOpenAI;
+pub use openai_native_to_openai::OpenAINativeToOpenAI;
 pub use gemini_native_to_openai::GeminiNativeRequest;
 pub use gemini_to_openai::GeminiToOpenAI;
 pub use merge_messages::merge_adjacent_messages;
-pub use openai_to_claude::OpenAIToClaude;
-pub use openai_to_codex::OpenAIToCodex;
+pub use openai_to_anthropic::OpenAIToAnthropic;
+pub use openai_to_openai_native::OpenAIToOpenAINative;
 pub use openai_to_gemini::OpenAIToGemini;
 pub use openai_to_gemini_native::{OpenAIResponseToGemini, OpenAISseChunk};
 pub use thinking::ThinkingExtractor;

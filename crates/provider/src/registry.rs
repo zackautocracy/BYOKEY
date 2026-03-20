@@ -8,258 +8,294 @@ pub struct ModelEntry {
     pub id: &'static str,
     /// Providers that can serve this model, in priority order.
     pub providers: &'static [ProviderId],
+    /// Provider-specific wire names that differ from the canonical ID.
+    /// Providers not listed here use `id` as-is.
+    pub api_names: &'static [(ProviderId, &'static str)],
 }
 
 /// Unified model registry. Provider order within each entry determines
 /// resolution priority: the first provider wins in `resolve_provider()`.
 const REGISTRY: &[ModelEntry] = &[
-    // Codex-only (reasoning + legacy)
+    // OpenAI-only (reasoning + legacy)
     ModelEntry {
         id: "o3",
-        providers: &[ProviderId::Codex],
+        providers: &[ProviderId::OpenAI],
+        api_names: &[],
     },
     ModelEntry {
         id: "o4-mini",
-        providers: &[ProviderId::Codex],
+        providers: &[ProviderId::OpenAI],
+        api_names: &[],
     },
     ModelEntry {
         id: "gpt-4-turbo",
-        providers: &[ProviderId::Codex],
+        providers: &[ProviderId::OpenAI],
+        api_names: &[],
     },
     ModelEntry {
         id: "gpt-4",
-        providers: &[ProviderId::Codex],
+        providers: &[ProviderId::OpenAI],
+        api_names: &[],
     },
-    // Codex-primary, also on Copilot
+    // OpenAI-primary, also on Copilot
     ModelEntry {
         id: "gpt-5.4",
-        providers: &[ProviderId::Codex, ProviderId::Copilot],
+        providers: &[ProviderId::OpenAI, ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "gpt-5.4-mini",
-        providers: &[ProviderId::Codex, ProviderId::Copilot],
+        providers: &[ProviderId::OpenAI, ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "gpt-5.4-nano",
-        providers: &[ProviderId::Codex],
+        providers: &[ProviderId::OpenAI],
+        api_names: &[],
     },
     ModelEntry {
         id: "gpt-5.3-codex",
-        providers: &[ProviderId::Codex, ProviderId::Copilot],
+        providers: &[ProviderId::OpenAI, ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "gpt-5.3-codex-spark",
-        providers: &[ProviderId::Codex],
+        providers: &[ProviderId::OpenAI],
+        api_names: &[],
     },
     ModelEntry {
         id: "gpt-5.2-codex",
-        providers: &[ProviderId::Codex, ProviderId::Copilot],
+        providers: &[ProviderId::OpenAI, ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "gpt-5.2",
-        providers: &[ProviderId::Codex, ProviderId::Copilot],
+        providers: &[ProviderId::OpenAI, ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "gpt-5.1-codex-max",
-        providers: &[ProviderId::Codex, ProviderId::Copilot],
+        providers: &[ProviderId::OpenAI, ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "gpt-5.1-codex",
-        providers: &[ProviderId::Codex, ProviderId::Copilot],
+        providers: &[ProviderId::OpenAI, ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "gpt-5.1-codex-mini",
-        providers: &[ProviderId::Codex, ProviderId::Copilot],
+        providers: &[ProviderId::OpenAI, ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "gpt-5.1",
-        providers: &[ProviderId::Codex, ProviderId::Copilot],
+        providers: &[ProviderId::OpenAI, ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "gpt-5-codex",
-        providers: &[ProviderId::Codex],
+        providers: &[ProviderId::OpenAI],
+        api_names: &[],
     },
     ModelEntry {
         id: "gpt-5-codex-mini",
-        providers: &[ProviderId::Codex],
+        providers: &[ProviderId::OpenAI],
+        api_names: &[],
     },
     ModelEntry {
         id: "gpt-5",
-        providers: &[ProviderId::Codex, ProviderId::Copilot],
+        providers: &[ProviderId::OpenAI, ProviderId::Copilot],
+        api_names: &[],
     },
     // Copilot-only
     ModelEntry {
         id: "gpt-4o",
         providers: &[ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "gpt-4.1",
         providers: &[ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "gpt-5-mini",
         providers: &[ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "raptor-mini",
         providers: &[ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "goldeneye",
         providers: &[ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "grok-code-fast-1",
         providers: &[ProviderId::Copilot],
+        api_names: &[],
     },
-    // Claude (Anthropic — dashes)
+    // Claude — consolidated (Anthropic hyphen convention is canonical)
     ModelEntry {
         id: "claude-opus-4-6",
-        providers: &[ProviderId::Claude],
+        providers: &[ProviderId::Anthropic, ProviderId::Copilot],
+        api_names: &[(ProviderId::Copilot, "claude-opus-4.6")],
     },
     ModelEntry {
         id: "claude-opus-4-5",
-        providers: &[ProviderId::Claude],
+        providers: &[ProviderId::Anthropic, ProviderId::Copilot],
+        api_names: &[(ProviderId::Copilot, "claude-opus-4.5")],
     },
     ModelEntry {
         id: "claude-sonnet-4-5",
-        providers: &[ProviderId::Claude, ProviderId::Antigravity],
+        providers: &[ProviderId::Anthropic, ProviderId::Copilot, ProviderId::Antigravity],
+        api_names: &[(ProviderId::Copilot, "claude-sonnet-4.5")],
     },
     ModelEntry {
         id: "claude-haiku-4-5-20251001",
-        providers: &[ProviderId::Claude],
+        providers: &[ProviderId::Anthropic],
+        api_names: &[],
     },
-    // Copilot Claude (GitHub — dots)
-    ModelEntry {
-        id: "claude-opus-4.6",
-        providers: &[ProviderId::Copilot],
-    },
-    ModelEntry {
-        id: "claude-opus-4.5",
-        providers: &[ProviderId::Copilot],
-    },
+    // Copilot-only Claude (canonical = Copilot name)
     ModelEntry {
         id: "claude-sonnet-4.6",
         providers: &[ProviderId::Copilot],
-    },
-    ModelEntry {
-        id: "claude-sonnet-4.5",
-        providers: &[ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "claude-sonnet-4",
         providers: &[ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "claude-haiku-4.5",
         providers: &[ProviderId::Copilot],
+        api_names: &[],
     },
     // Gemini (Google AI)
     ModelEntry {
         id: "gemini-2.0-flash",
         providers: &[ProviderId::Gemini],
+        api_names: &[],
     },
     ModelEntry {
         id: "gemini-2.0-flash-lite",
         providers: &[ProviderId::Gemini],
+        api_names: &[],
     },
     ModelEntry {
         id: "gemini-1.5-pro",
         providers: &[ProviderId::Gemini],
+        api_names: &[],
     },
     ModelEntry {
         id: "gemini-1.5-flash",
         providers: &[ProviderId::Gemini],
+        api_names: &[],
     },
-    // Copilot Gemini (GitHub)
+    // Gemini (Copilot + Antigravity — consolidated)
     ModelEntry {
         id: "gemini-2.5-pro",
-        providers: &[ProviderId::Copilot],
+        providers: &[ProviderId::Copilot, ProviderId::Antigravity],
+        api_names: &[],
+    },
+    ModelEntry {
+        id: "gemini-2.5-flash",
+        providers: &[ProviderId::Antigravity],
+        api_names: &[],
     },
     ModelEntry {
         id: "gemini-3-flash",
         providers: &[ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "gemini-3-pro",
         providers: &[ProviderId::Copilot],
+        api_names: &[],
     },
     ModelEntry {
         id: "gemini-3.1-pro",
         providers: &[ProviderId::Copilot],
+        api_names: &[],
     },
     // Kiro
     ModelEntry {
         id: "kiro-default",
         providers: &[ProviderId::Kiro],
-    },
-    // Antigravity
-    ModelEntry {
-        id: "ag-gemini-2.5-flash",
-        providers: &[ProviderId::Antigravity],
-    },
-    ModelEntry {
-        id: "ag-gemini-2.5-pro",
-        providers: &[ProviderId::Antigravity],
-    },
-    ModelEntry {
-        id: "ag-claude-sonnet-4-5",
-        providers: &[ProviderId::Antigravity],
+        api_names: &[],
     },
     // Qwen
     ModelEntry {
         id: "qwen3-coder-plus",
         providers: &[ProviderId::Qwen],
+        api_names: &[],
     },
     ModelEntry {
         id: "qwen3-235b-a22b",
         providers: &[ProviderId::Qwen],
+        api_names: &[],
     },
     ModelEntry {
         id: "qwen3-32b",
         providers: &[ProviderId::Qwen],
+        api_names: &[],
     },
     ModelEntry {
         id: "qwen3-14b",
         providers: &[ProviderId::Qwen],
+        api_names: &[],
     },
     ModelEntry {
         id: "qwen3-8b",
         providers: &[ProviderId::Qwen],
+        api_names: &[],
     },
     ModelEntry {
         id: "qwen3-max",
         providers: &[ProviderId::Qwen],
+        api_names: &[],
     },
     ModelEntry {
         id: "qwen-plus",
         providers: &[ProviderId::Qwen],
+        api_names: &[],
     },
     ModelEntry {
         id: "qwen-turbo",
         providers: &[ProviderId::Qwen],
+        api_names: &[],
     },
     // Kimi
     ModelEntry {
         id: "kimi-k2-0711",
         providers: &[ProviderId::Kimi],
+        api_names: &[],
     },
     // iFlow
     ModelEntry {
         id: "glm-4.5",
         providers: &[ProviderId::IFlow],
+        api_names: &[],
     },
     ModelEntry {
         id: "glm-4.5-air",
         providers: &[ProviderId::IFlow],
+        api_names: &[],
     },
     ModelEntry {
         id: "glm-z1-flash",
         providers: &[ProviderId::IFlow],
+        api_names: &[],
     },
     ModelEntry {
         id: "kimi-k2",
         providers: &[ProviderId::IFlow],
+        api_names: &[],
     },
 ];
 
@@ -283,15 +319,62 @@ pub fn parse_qualified_model(model: &str) -> (Option<ProviderId>, &str) {
     (None, model)
 }
 
+/// Normalize a model string to its canonical registry ID.
+///
+/// Handles: ag- prefix stripping, Copilot wire names (dot variants),
+/// and passthrough for unknown models.
+#[must_use]
+pub fn resolve_model_id(model: &str) -> String {
+    let stripped = model.strip_prefix("ag-").unwrap_or(model);
+
+    for entry in REGISTRY {
+        if entry.id == stripped {
+            return entry.id.to_string();
+        }
+        for &(_, wire) in entry.api_names {
+            if wire == stripped {
+                return entry.id.to_string();
+            }
+        }
+    }
+    stripped.to_string()
+}
+
+/// Returns the provider-specific wire name for sending to a provider's API.
+///
+/// Looks up the model (by canonical ID or any wire name) and returns the
+/// api_names entry for the given provider, falling back to the canonical ID.
+#[must_use]
+pub fn api_name_for_provider(model: &str, provider: &ProviderId) -> String {
+    for entry in REGISTRY {
+        let matches = entry.id == model
+            || entry.api_names.iter().any(|&(_, wire)| wire == model);
+        if matches {
+            for &(ref p, wire) in entry.api_names {
+                if p == provider {
+                    return wire.to_string();
+                }
+            }
+            return entry.id.to_string();
+        }
+    }
+    model.to_string()
+}
+
 /// Resolve a model string to its backing provider, considering only providers
 /// for which `filter` returns `true`. Uses REGISTRY order (first match wins).
+///
+/// Handles ag- prefix stripping and api_names wire name matching.
 #[must_use]
 pub fn resolve_provider_with<F>(model: &str, filter: F) -> Option<ProviderId>
 where
     F: Fn(&ProviderId) -> bool,
 {
+    let stripped = model.strip_prefix("ag-").unwrap_or(model);
     for entry in REGISTRY {
-        if entry.id == model {
+        let matches = entry.id == stripped
+            || entry.api_names.iter().any(|&(_, wire)| wire == stripped);
+        if matches {
             for provider in entry.providers {
                 if filter(provider) {
                     return Some(provider.clone());
@@ -347,11 +430,11 @@ mod tests {
     fn test_resolve_claude() {
         assert_eq!(
             resolve_provider("claude-opus-4-6"),
-            Some(ProviderId::Claude)
+            Some(ProviderId::Anthropic)
         );
         assert_eq!(
             resolve_provider("claude-haiku-4-5-20251001"),
-            Some(ProviderId::Claude)
+            Some(ProviderId::Anthropic)
         );
     }
 
@@ -371,8 +454,8 @@ mod tests {
 
     #[test]
     fn test_resolve_codex() {
-        assert_eq!(resolve_provider("o4-mini"), Some(ProviderId::Codex));
-        assert_eq!(resolve_provider("o3"), Some(ProviderId::Codex));
+        assert_eq!(resolve_provider("o4-mini"), Some(ProviderId::OpenAI));
+        assert_eq!(resolve_provider("o3"), Some(ProviderId::OpenAI));
     }
 
     #[test]
@@ -391,10 +474,10 @@ mod tests {
     #[test]
     fn test_shared_models_resolve_to_codex_first() {
         // Codex is listed first in REGISTRY for shared models.
-        assert_eq!(resolve_provider("gpt-5.1"), Some(ProviderId::Codex));
-        assert_eq!(resolve_provider("gpt-5.1-codex"), Some(ProviderId::Codex));
-        assert_eq!(resolve_provider("gpt-5.2"), Some(ProviderId::Codex));
-        assert_eq!(resolve_provider("gpt-5.3-codex"), Some(ProviderId::Codex));
+        assert_eq!(resolve_provider("gpt-5.1"), Some(ProviderId::OpenAI));
+        assert_eq!(resolve_provider("gpt-5.1-codex"), Some(ProviderId::OpenAI));
+        assert_eq!(resolve_provider("gpt-5.2"), Some(ProviderId::OpenAI));
+        assert_eq!(resolve_provider("gpt-5.3-codex"), Some(ProviderId::OpenAI));
     }
 
     #[test]
@@ -423,12 +506,20 @@ mod tests {
 
     #[test]
     fn test_resolve_antigravity() {
+        // ag- prefix entries no longer exist; Antigravity models are merged.
+        // claude-sonnet-4-5 has Antigravity in its providers list (not first).
         assert_eq!(
-            resolve_provider("ag-gemini-2.5-pro"),
+            resolve_provider_with("claude-sonnet-4-5", |p| *p == ProviderId::Antigravity),
             Some(ProviderId::Antigravity)
         );
+        // gemini-2.5-pro has Copilot first, Antigravity second.
         assert_eq!(
-            resolve_provider("ag-claude-sonnet-4-5"),
+            resolve_provider_with("gemini-2.5-pro", |p| *p == ProviderId::Antigravity),
+            Some(ProviderId::Antigravity)
+        );
+        // gemini-2.5-flash is Antigravity-only.
+        assert_eq!(
+            resolve_provider("gemini-2.5-flash"),
             Some(ProviderId::Antigravity)
         );
     }
@@ -472,23 +563,23 @@ mod tests {
     }
 
     #[test]
-    fn test_claude_models_resolve_to_claude() {
-        for m in models_for_provider(&ProviderId::Claude) {
+    fn test_claude_models_resolve_to_anthropic() {
+        for m in models_for_provider(&ProviderId::Anthropic) {
             assert_eq!(
                 resolve_provider(&m),
-                Some(ProviderId::Claude),
-                "model {m} should resolve to Claude"
+                Some(ProviderId::Anthropic),
+                "model {m} should resolve to Anthropic"
             );
         }
     }
 
     #[test]
-    fn test_codex_models_resolve_to_codex() {
-        for m in models_for_provider(&ProviderId::Codex) {
+    fn test_codex_models_resolve_to_openai() {
+        for m in models_for_provider(&ProviderId::OpenAI) {
             assert_eq!(
                 resolve_provider(&m),
-                Some(ProviderId::Codex),
-                "model {m} should resolve to Codex"
+                Some(ProviderId::OpenAI),
+                "model {m} should resolve to OpenAI"
             );
         }
     }
@@ -506,16 +597,17 @@ mod tests {
 
     #[test]
     fn test_antigravity_models_resolve_to_antigravity() {
-        // Antigravity-only models (ag- prefix) resolve to Antigravity.
-        // Shared models like claude-sonnet-4-5 resolve to their first provider (Claude).
+        // All Antigravity models now use canonical IDs (no ag- prefix).
+        // Shared models resolve to their first provider, but Antigravity is reachable.
         for m in models_for_provider(&ProviderId::Antigravity) {
-            let resolved = resolve_provider(&m);
             assert!(
-                resolved == Some(ProviderId::Antigravity) || {
-                    // Shared model: Antigravity must be a listed provider
-                    resolve_provider_with(&m, |p| *p == ProviderId::Antigravity)
-                        == Some(ProviderId::Antigravity)
-                },
+                !m.starts_with("ag-"),
+                "no ag- prefix in registry: {m}"
+            );
+            let resolved = resolve_provider_with(&m, |p| *p == ProviderId::Antigravity);
+            assert_eq!(
+                resolved,
+                Some(ProviderId::Antigravity),
                 "model {m} should be servable by Antigravity"
             );
         }
@@ -523,28 +615,28 @@ mod tests {
 
     #[test]
     fn test_legacy_gpt4_resolves_to_codex() {
-        assert_eq!(resolve_provider("gpt-4-turbo"), Some(ProviderId::Codex));
-        assert_eq!(resolve_provider("gpt-4"), Some(ProviderId::Codex));
+        assert_eq!(resolve_provider("gpt-4-turbo"), Some(ProviderId::OpenAI));
+        assert_eq!(resolve_provider("gpt-4"), Some(ProviderId::OpenAI));
     }
 
     #[test]
     fn test_resolve_provider_with_filter() {
         // gpt-5.1 has [Codex, Copilot]; filtering out Codex should yield Copilot.
         assert_eq!(
-            resolve_provider_with("gpt-5.1", |p| *p != ProviderId::Codex),
+            resolve_provider_with("gpt-5.1", |p| *p != ProviderId::OpenAI),
             Some(ProviderId::Copilot)
         );
         // Filtering out both should yield None.
         assert_eq!(
             resolve_provider_with("gpt-5.1", |p| {
-                *p != ProviderId::Codex && *p != ProviderId::Copilot
+                *p != ProviderId::OpenAI && *p != ProviderId::Copilot
             }),
             None
         );
         // Single-provider model unaffected by permissive filter.
         assert_eq!(
             resolve_provider_with("o3", |_| true),
-            Some(ProviderId::Codex)
+            Some(ProviderId::OpenAI)
         );
     }
 
@@ -587,16 +679,21 @@ mod tests {
     }
 
     #[test]
-    fn test_claude_dashes_vs_dots() {
-        // Dashes → Claude (Anthropic)
+    fn test_claude_consolidated() {
+        // Dashes → Anthropic (canonical)
         assert_eq!(
             resolve_provider("claude-opus-4-6"),
-            Some(ProviderId::Claude)
+            Some(ProviderId::Anthropic)
         );
-        // Dots → Copilot (GitHub)
+        // Consolidated: Copilot is also listed
+        assert_eq!(
+            resolve_provider_with("claude-opus-4-6", |p| *p == ProviderId::Copilot),
+            Some(ProviderId::Copilot)
+        );
+        // Dot variants now resolve via api_names to the same entry
         assert_eq!(
             resolve_provider("claude-opus-4.6"),
-            Some(ProviderId::Copilot)
+            Some(ProviderId::Anthropic)
         );
     }
 
@@ -609,5 +706,127 @@ mod tests {
                 entry.id
             );
         }
+    }
+
+    #[test]
+    fn test_claude_opus_consolidated() {
+        let entry = REGISTRY.iter().find(|e| e.id == "claude-opus-4-6").unwrap();
+        assert!(entry.providers.contains(&ProviderId::Anthropic));
+        assert!(entry.providers.contains(&ProviderId::Copilot));
+        assert_eq!(entry.api_names.len(), 1);
+        assert_eq!(entry.api_names[0], (ProviderId::Copilot, "claude-opus-4.6"));
+    }
+
+    #[test]
+    fn test_no_ag_prefix_entries() {
+        for entry in REGISTRY {
+            assert!(
+                !entry.id.starts_with("ag-"),
+                "Found ag- prefix in registry: {}",
+                entry.id
+            );
+        }
+    }
+
+    #[test]
+    fn test_no_duplicate_claude_dot_entries() {
+        assert!(REGISTRY.iter().find(|e| e.id == "claude-opus-4.6").is_none());
+        assert!(REGISTRY.iter().find(|e| e.id == "claude-opus-4.5").is_none());
+        assert!(REGISTRY.iter().find(|e| e.id == "claude-sonnet-4.5").is_none());
+    }
+
+    #[test]
+    fn test_gemini_antigravity_merged() {
+        let entry = REGISTRY.iter().find(|e| e.id == "gemini-2.5-pro").unwrap();
+        assert!(entry.providers.contains(&ProviderId::Copilot));
+        assert!(entry.providers.contains(&ProviderId::Antigravity));
+    }
+
+    // --- resolve_model_id tests ---
+
+    #[test]
+    fn test_resolve_model_id_canonical_passthrough() {
+        assert_eq!(resolve_model_id("claude-opus-4-6"), "claude-opus-4-6");
+        assert_eq!(resolve_model_id("gpt-5.1"), "gpt-5.1");
+    }
+
+    #[test]
+    fn test_resolve_model_id_copilot_wire_to_canonical() {
+        assert_eq!(resolve_model_id("claude-opus-4.6"), "claude-opus-4-6");
+        assert_eq!(resolve_model_id("claude-opus-4.5"), "claude-opus-4-5");
+        assert_eq!(resolve_model_id("claude-sonnet-4.5"), "claude-sonnet-4-5");
+    }
+
+    #[test]
+    fn test_resolve_model_id_ag_prefix_stripped() {
+        assert_eq!(resolve_model_id("ag-gemini-2.5-pro"), "gemini-2.5-pro");
+        assert_eq!(resolve_model_id("ag-gemini-2.5-flash"), "gemini-2.5-flash");
+        assert_eq!(resolve_model_id("ag-claude-sonnet-4.5"), "claude-sonnet-4-5");
+    }
+
+    #[test]
+    fn test_resolve_model_id_unknown_passthrough() {
+        assert_eq!(resolve_model_id("unknown-model-xyz"), "unknown-model-xyz");
+        assert_eq!(resolve_model_id("ag-unknown"), "unknown");
+    }
+
+    // --- api_name_for_provider tests ---
+
+    #[test]
+    fn test_api_name_anthropic_gets_canonical() {
+        assert_eq!(
+            api_name_for_provider("claude-opus-4-6", &ProviderId::Anthropic),
+            "claude-opus-4-6"
+        );
+    }
+
+    #[test]
+    fn test_api_name_copilot_gets_dot_variant() {
+        assert_eq!(
+            api_name_for_provider("claude-opus-4-6", &ProviderId::Copilot),
+            "claude-opus-4.6"
+        );
+    }
+
+    #[test]
+    fn test_api_name_antigravity_gets_canonical() {
+        assert_eq!(
+            api_name_for_provider("gemini-2.5-pro", &ProviderId::Antigravity),
+            "gemini-2.5-pro"
+        );
+    }
+
+    #[test]
+    fn test_api_name_accepts_non_canonical_input() {
+        assert_eq!(
+            api_name_for_provider("claude-opus-4.6", &ProviderId::Anthropic),
+            "claude-opus-4-6"
+        );
+        assert_eq!(
+            api_name_for_provider("claude-opus-4.6", &ProviderId::Copilot),
+            "claude-opus-4.6"
+        );
+    }
+
+    #[test]
+    fn test_api_name_unknown_passthrough() {
+        assert_eq!(
+            api_name_for_provider("unknown-model", &ProviderId::Anthropic),
+            "unknown-model"
+        );
+    }
+
+    // --- resolve_provider_with api_names tests ---
+
+    #[test]
+    fn test_resolve_provider_with_copilot_wire_name() {
+        let p = resolve_provider("claude-opus-4.6");
+        assert_eq!(p, Some(ProviderId::Anthropic));
+    }
+
+    #[test]
+    fn test_resolve_provider_with_ag_prefix() {
+        let p = resolve_provider("ag-gemini-2.5-pro");
+        assert!(p.is_some());
     }
 }

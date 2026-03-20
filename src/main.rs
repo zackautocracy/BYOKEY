@@ -189,6 +189,18 @@ enum AutostartAction {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    // Serve initialises its own subscriber (file logging, JSON format, etc.),
+    // so we only set up a lightweight stderr subscriber for every *other*
+    // command so that tracing::info! / tracing::error! are visible.
+    if !matches!(cli.command, Commands::Serve { .. }) {
+        let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+        tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_target(false)
+            .init();
+    }
+
     match cli.command {
         Commands::Serve { server } => serve::cmd_serve(server).await,
         Commands::Start { daemon } => daemon::cmd_start(daemon),

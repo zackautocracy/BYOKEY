@@ -176,8 +176,8 @@ mod tests {
     async fn test_save_and_load() {
         let store = InMemoryTokenStore::new();
         let token = OAuthToken::new("test-access");
-        store.save(&ProviderId::Claude, &token).await.unwrap();
-        let loaded = store.load(&ProviderId::Claude).await.unwrap().unwrap();
+        store.save(&ProviderId::Anthropic, &token).await.unwrap();
+        let loaded = store.load(&ProviderId::Anthropic).await.unwrap().unwrap();
         assert_eq!(loaded.access_token, "test-access");
     }
 
@@ -191,25 +191,25 @@ mod tests {
     async fn test_remove() {
         let store = InMemoryTokenStore::new();
         store
-            .save(&ProviderId::Codex, &OAuthToken::new("tok"))
+            .save(&ProviderId::OpenAI, &OAuthToken::new("tok"))
             .await
             .unwrap();
-        store.remove(&ProviderId::Codex).await.unwrap();
-        assert!(store.load(&ProviderId::Codex).await.unwrap().is_none());
+        store.remove(&ProviderId::OpenAI).await.unwrap();
+        assert!(store.load(&ProviderId::OpenAI).await.unwrap().is_none());
     }
 
     #[tokio::test]
     async fn test_overwrite() {
         let store = InMemoryTokenStore::new();
         store
-            .save(&ProviderId::Claude, &OAuthToken::new("first"))
+            .save(&ProviderId::Anthropic, &OAuthToken::new("first"))
             .await
             .unwrap();
         store
-            .save(&ProviderId::Claude, &OAuthToken::new("second"))
+            .save(&ProviderId::Anthropic, &OAuthToken::new("second"))
             .await
             .unwrap();
-        let loaded = store.load(&ProviderId::Claude).await.unwrap().unwrap();
+        let loaded = store.load(&ProviderId::Anthropic).await.unwrap().unwrap();
         assert_eq!(loaded.access_token, "second");
     }
 
@@ -217,7 +217,7 @@ mod tests {
     async fn test_multiple_providers() {
         let store = InMemoryTokenStore::new();
         store
-            .save(&ProviderId::Claude, &OAuthToken::new("claude-tok"))
+            .save(&ProviderId::Anthropic, &OAuthToken::new("claude-tok"))
             .await
             .unwrap();
         store
@@ -226,7 +226,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             store
-                .load(&ProviderId::Claude)
+                .load(&ProviderId::Anthropic)
                 .await
                 .unwrap()
                 .unwrap()
@@ -251,7 +251,7 @@ mod tests {
         let store = InMemoryTokenStore::new();
         store
             .save_account(
-                &ProviderId::Claude,
+                &ProviderId::Anthropic,
                 "work",
                 Some("Work"),
                 &OAuthToken::new("w"),
@@ -259,11 +259,11 @@ mod tests {
             .await
             .unwrap();
         store
-            .save_account(&ProviderId::Claude, "personal", None, &OAuthToken::new("p"))
+            .save_account(&ProviderId::Anthropic, "personal", None, &OAuthToken::new("p"))
             .await
             .unwrap();
         // First account is active.
-        let loaded = store.load(&ProviderId::Claude).await.unwrap().unwrap();
+        let loaded = store.load(&ProviderId::Anthropic).await.unwrap().unwrap();
         assert_eq!(loaded.access_token, "w");
     }
 
@@ -271,15 +271,15 @@ mod tests {
     async fn test_set_active() {
         let store = InMemoryTokenStore::new();
         store
-            .save_account(&ProviderId::Claude, "a", None, &OAuthToken::new("tok-a"))
+            .save_account(&ProviderId::Anthropic, "a", None, &OAuthToken::new("tok-a"))
             .await
             .unwrap();
         store
-            .save_account(&ProviderId::Claude, "b", None, &OAuthToken::new("tok-b"))
+            .save_account(&ProviderId::Anthropic, "b", None, &OAuthToken::new("tok-b"))
             .await
             .unwrap();
-        store.set_active(&ProviderId::Claude, "b").await.unwrap();
-        let loaded = store.load(&ProviderId::Claude).await.unwrap().unwrap();
+        store.set_active(&ProviderId::Anthropic, "b").await.unwrap();
+        let loaded = store.load(&ProviderId::Anthropic).await.unwrap().unwrap();
         assert_eq!(loaded.access_token, "tok-b");
     }
 
@@ -288,7 +288,7 @@ mod tests {
         let store = InMemoryTokenStore::new();
         store
             .save_account(
-                &ProviderId::Claude,
+                &ProviderId::Anthropic,
                 "work",
                 Some("Work"),
                 &OAuthToken::new("w"),
@@ -297,14 +297,14 @@ mod tests {
             .unwrap();
         store
             .save_account(
-                &ProviderId::Claude,
+                &ProviderId::Anthropic,
                 "personal",
                 Some("Personal"),
                 &OAuthToken::new("p"),
             )
             .await
             .unwrap();
-        let accounts = store.list_accounts(&ProviderId::Claude).await.unwrap();
+        let accounts = store.list_accounts(&ProviderId::Anthropic).await.unwrap();
         assert_eq!(accounts.len(), 2);
         assert!(accounts[0].is_active);
     }
@@ -313,14 +313,14 @@ mod tests {
     async fn test_load_all_tokens() {
         let store = InMemoryTokenStore::new();
         store
-            .save_account(&ProviderId::Claude, "a", None, &OAuthToken::new("tok-a"))
+            .save_account(&ProviderId::Anthropic, "a", None, &OAuthToken::new("tok-a"))
             .await
             .unwrap();
         store
-            .save_account(&ProviderId::Claude, "b", None, &OAuthToken::new("tok-b"))
+            .save_account(&ProviderId::Anthropic, "b", None, &OAuthToken::new("tok-b"))
             .await
             .unwrap();
-        let all = store.load_all_tokens(&ProviderId::Claude).await.unwrap();
+        let all = store.load_all_tokens(&ProviderId::Anthropic).await.unwrap();
         assert_eq!(all.len(), 2);
     }
 }

@@ -176,10 +176,10 @@ pub fn apply_thinking(mut body: Value, provider: &ProviderId, config: &ThinkingC
             body
         }
         // Claude: budget tokens
-        (ProviderId::Claude, ThinkingConfig::Budget(budget)) => {
+        (ProviderId::Anthropic, ThinkingConfig::Budget(budget)) => {
             ThinkingExtractor::inject_thinking(body, *budget)
         }
-        (ProviderId::Claude, ThinkingConfig::Level(level)) => {
+        (ProviderId::Anthropic, ThinkingConfig::Level(level)) => {
             let budget = match level {
                 ThinkingLevel::Low => 4096,
                 ThinkingLevel::Medium => 10_000,
@@ -188,7 +188,7 @@ pub fn apply_thinking(mut body: Value, provider: &ProviderId, config: &ThinkingC
             ThinkingExtractor::inject_thinking(body, budget)
         }
         // Codex: reasoning effort
-        (ProviderId::Codex, ThinkingConfig::Budget(budget)) => {
+        (ProviderId::OpenAI, ThinkingConfig::Budget(budget)) => {
             let effort = if *budget <= 4096 {
                 "low"
             } else if *budget <= 16_384 {
@@ -199,7 +199,7 @@ pub fn apply_thinking(mut body: Value, provider: &ProviderId, config: &ThinkingC
             body["reasoning"] = json!({"effort": effort});
             body
         }
-        (ProviderId::Codex, ThinkingConfig::Level(level)) => {
+        (ProviderId::OpenAI, ThinkingConfig::Level(level)) => {
             let effort = level_to_str(*level);
             body["reasoning"] = json!({"effort": effort});
             body
@@ -417,7 +417,7 @@ mod tests {
     #[test]
     fn test_apply_claude_budget() {
         let body = json!({"model": "claude-opus-4-5", "max_tokens": 100});
-        let out = apply_thinking(body, &ProviderId::Claude, &ThinkingConfig::Budget(10000));
+        let out = apply_thinking(body, &ProviderId::Anthropic, &ThinkingConfig::Budget(10000));
         assert_eq!(out["thinking"]["type"], "enabled");
         assert_eq!(out["thinking"]["budget_tokens"], 10000);
         assert!(out["max_tokens"].as_u64().unwrap() > 10000);
@@ -428,7 +428,7 @@ mod tests {
         let body = json!({"model": "m", "max_tokens": 100});
         let out = apply_thinking(
             body,
-            &ProviderId::Claude,
+            &ProviderId::Anthropic,
             &ThinkingConfig::Level(ThinkingLevel::High),
         );
         assert_eq!(out["thinking"]["type"], "enabled");
@@ -440,7 +440,7 @@ mod tests {
         let body = json!({"model": "o4-mini"});
         let out = apply_thinking(
             body,
-            &ProviderId::Codex,
+            &ProviderId::OpenAI,
             &ThinkingConfig::Level(ThinkingLevel::High),
         );
         assert_eq!(out["reasoning"]["effort"], "high");
@@ -449,7 +449,7 @@ mod tests {
     #[test]
     fn test_apply_codex_budget() {
         let body = json!({"model": "o4-mini"});
-        let out = apply_thinking(body, &ProviderId::Codex, &ThinkingConfig::Budget(2000));
+        let out = apply_thinking(body, &ProviderId::OpenAI, &ThinkingConfig::Budget(2000));
         assert_eq!(out["reasoning"]["effort"], "low");
     }
 
@@ -496,7 +496,7 @@ mod tests {
             "reasoning_effort": "high",
             "generationConfig": {"thinkingConfig": {"thinkingBudget": 1000}}
         });
-        let out = apply_thinking(body, &ProviderId::Claude, &ThinkingConfig::Disabled);
+        let out = apply_thinking(body, &ProviderId::Anthropic, &ThinkingConfig::Disabled);
         assert!(out.get("thinking").is_none());
         assert!(out.get("reasoning_effort").is_none());
         assert!(

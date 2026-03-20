@@ -7,7 +7,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use byokey_provider::{make_executor_for_model, parse_qualified_model};
+use byokey_provider::{make_executor_for_model, parse_qualified_model, resolve_model_id};
 use byokey_translate::{apply_thinking, parse_model_suffix};
 use byokey_types::{ChatRequest, ProviderId, traits::ProviderResponse};
 use futures_util::TryStreamExt as _;
@@ -77,16 +77,29 @@ async fn chat_completions_inner(
     // Parse thinking suffix from (possibly alias-resolved) model name.
     let suffix = parse_model_suffix(bare_model);
 
+    // Normalize to canonical registry ID (handles dot variants, ag- prefix).
+    let canonical_model = resolve_model_id(&suffix.model);
+
     let config_fn = |p: &ProviderId| {
         let mut pc = config.providers.get(p).cloned().unwrap_or_default();
         if force_copilot && *p != ProviderId::Copilot {
-            pc.backend = Some(ProviderId::Copilot);
+            // Route through Copilot by overriding the routing entries.
+            let copilot_config = config
+                .providers
+                .get(&ProviderId::Copilot)
+                .cloned()
+                .unwrap_or_default();
+            pc.routing = byokey_provider::routing::auto_generate_routing(
+                &ProviderId::Copilot,
+                &copilot_config,
+                &oauth_providers,
+            );
         }
         Some(pc)
     };
 
     let executor = make_executor_for_model(
-        &suffix.model,
+        &canonical_model,
         config_fn,
         &oauth_providers,
         provider_hint.as_ref(),
@@ -96,22 +109,22 @@ async fn chat_completions_inner(
     )
     .map_err(ApiError::from)?;
 
-    let provider = byokey_provider::resolve_provider(&suffix.model)
+    let provider = byokey_provider::resolve_provider(&canonical_model)
         .map_or_else(|| "unknown".to_string(), |p| p.to_string());
     tracing::info!(
-        model = %suffix.model,
+        model = %canonical_model,
         provider = %provider,
         stream = request.stream,
         "chat completion request"
     );
 
-    // Replace model name with the clean version (suffix stripped)
-    request.model.clone_from(&suffix.model);
+    // Replace model name with canonical version
+    request.model = canonical_model.clone();
 
     // Apply thinking config if suffix was parsed
     if let Some(ref thinking) = suffix.thinking {
         let provider =
-            byokey_provider::resolve_provider(&suffix.model).unwrap_or(ProviderId::Claude);
+            byokey_provider::resolve_provider(&canonical_model).unwrap_or(ProviderId::Anthropic);
         let mut body = request.into_body();
         body = apply_thinking(body, &provider, thinking);
         // Re-parse the modified body back into ChatRequest
@@ -125,12 +138,12 @@ async fn chat_completions_inner(
         || !config.payload.filter.is_empty()
     {
         let mut body = request.into_body();
-        body = config.apply_payload_rules(body, &suffix.model);
+        body = config.apply_payload_rules(body, &canonical_model);
         request = serde_json::from_value(body)
             .map_err(|e| ApiError::from(byokey_types::ByokError::Translation(e.to_string())))?;
     }
 
-    let model_name = suffix.model.clone();
+    let model_name = canonical_model;
     match executor.chat_completion(request).await {
         Ok(ProviderResponse::Complete(json)) => {
             // Extract token usage from the response if available.

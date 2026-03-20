@@ -6,12 +6,12 @@ use crate::http_util::ProviderHttp;
 use crate::registry;
 use async_trait::async_trait;
 use byokey_auth::AuthManager;
-use byokey_translate::{ClaudeToOpenAI, OpenAIToClaude, inject_cache_control};
+use byokey_translate::{AnthropicToOpenAI, OpenAIToAnthropic, inject_cache_control};
 use byokey_types::{
     ChatRequest, ProviderId, RateLimitStore,
     traits::{
-        ByteStream, ProviderExecutor, ProviderResponse, RequestTranslator, ResponseTranslator,
-        Result,
+        ApiFormat, ByteStream, ProviderExecutor, ProviderResponse, RequestTranslator,
+        ResponseTranslator, Result,
     },
 };
 use bytes::Bytes;
@@ -41,25 +41,27 @@ enum AuthMode {
 }
 
 /// Executor for the Anthropic Claude API.
-pub struct ClaudeExecutor {
+pub struct AnthropicExecutor {
     ph: ProviderHttp,
     api_key: Option<String>,
+    account_id: Option<String>,
     auth: Arc<AuthManager>,
 }
 
-impl ClaudeExecutor {
+impl AnthropicExecutor {
     /// Creates a new Claude executor with an optional API key and auth manager.
     pub fn new(
         http: Client,
         api_key: Option<String>,
+        account_id: Option<String>,
         auth: Arc<AuthManager>,
         ratelimit: Option<Arc<RateLimitStore>>,
     ) -> Self {
         let mut ph = ProviderHttp::new(http);
         if let Some(store) = ratelimit {
-            ph = ph.with_ratelimit(store, ProviderId::Claude);
+            ph = ph.with_ratelimit(store, ProviderId::Anthropic);
         }
-        Self { ph, api_key, auth }
+        Self { ph, api_key, account_id, auth }
     }
 
     /// Resolves the authentication mode: API key if present, otherwise OAuth token.
@@ -67,16 +69,19 @@ impl ClaudeExecutor {
         if let Some(key) = &self.api_key {
             return Ok(AuthMode::ApiKey(key.clone()));
         }
-        let token = self.auth.get_token(&ProviderId::Claude).await?;
+        let token = match &self.account_id {
+            Some(id) => self.auth.get_token_for(&ProviderId::Anthropic, id).await?,
+            None => self.auth.get_token(&ProviderId::Anthropic).await?,
+        };
         Ok(AuthMode::Bearer(token.access_token))
     }
 }
 
 #[async_trait]
-impl ProviderExecutor for ClaudeExecutor {
+impl ProviderExecutor for AnthropicExecutor {
     async fn chat_completion(&self, request: ChatRequest) -> Result<ProviderResponse> {
         let stream = request.stream;
-        let mut body = OpenAIToClaude.translate_request(request.into_body())?;
+        let mut body = OpenAIToAnthropic.translate_request(request.into_body())?;
         body = inject_cache_control(body);
         body["stream"] = Value::Bool(stream);
 
@@ -105,13 +110,65 @@ impl ProviderExecutor for ClaudeExecutor {
             Ok(ProviderResponse::Stream(translate_claude_sse(byte_stream)))
         } else {
             let json: Value = resp.json().await?;
-            let translated = ClaudeToOpenAI.translate_response(json)?;
+            let translated = AnthropicToOpenAI.translate_response(json)?;
             Ok(ProviderResponse::Complete(translated))
         }
     }
 
     fn supported_models(&self) -> Vec<String> {
-        registry::models_for_provider(&ProviderId::Claude)
+        registry::models_for_provider(&ProviderId::Anthropic)
+    }
+
+    async fn forward_request(
+        &self,
+        format: ApiFormat,
+        body: Value,
+        stream: bool,
+    ) -> Result<ProviderResponse> {
+        if format != ApiFormat::Anthropic {
+            return Err(byokey_types::ByokError::UnsupportedModel(
+                "AnthropicExecutor only supports Anthropic format forwarding".into(),
+            ));
+        }
+
+        let accept = if stream {
+            "text/event-stream"
+        } else {
+            "application/json"
+        };
+
+        let mut beta = ANTHROPIC_BETA.to_string();
+        if let Some(arr) = body.get("betas").and_then(Value::as_array) {
+            for b in arr {
+                if let Some(s) = b.as_str()
+                    && !beta.split(',').any(|existing| existing == s)
+                {
+                    beta.push(',');
+                    beta.push_str(s);
+                }
+            }
+        }
+
+        let auth = self.get_auth().await?;
+
+        let builder = self
+            .ph
+            .client()
+            .post(API_URL)
+            .header("anthropic-version", ANTHROPIC_VERSION)
+            .header("anthropic-beta", &beta)
+            .header("anthropic-dangerous-direct-browser-access", "true")
+            .header("x-app", "cli")
+            .header("content-type", "application/json")
+            .header("accept", accept)
+            .header("user-agent", USER_AGENT);
+
+        let builder = match &auth {
+            AuthMode::ApiKey(key) => builder.header("x-api-key", key.as_str()),
+            AuthMode::Bearer(tok) => builder.header("authorization", format!("Bearer {tok}")),
+        };
+
+        self.ph.send_passthrough(builder.json(&body), stream).await
     }
 }
 
@@ -309,10 +366,10 @@ mod tests {
     use super::*;
     use byokey_store::InMemoryTokenStore;
 
-    fn make_executor() -> ClaudeExecutor {
+    fn make_executor() -> AnthropicExecutor {
         let store = Arc::new(InMemoryTokenStore::new());
         let auth = Arc::new(AuthManager::new(store, rquest::Client::new()));
-        ClaudeExecutor::new(Client::new(), None, auth, None)
+        AnthropicExecutor::new(Client::new(), None, None, auth, None)
     }
 
     #[test]
@@ -327,7 +384,7 @@ mod tests {
     fn test_supported_models_with_api_key() {
         let store = Arc::new(InMemoryTokenStore::new());
         let auth = Arc::new(AuthManager::new(store, rquest::Client::new()));
-        let ex = ClaudeExecutor::new(Client::new(), Some("sk-ant-test".into()), auth, None);
+        let ex = AnthropicExecutor::new(Client::new(), Some("sk-ant-test".into()), None, auth, None);
         assert!(!ex.supported_models().is_empty());
     }
 }

@@ -11,7 +11,7 @@ use byokey_types::{ByokError, RequestTranslator, traits::Result};
 use serde_json::{Value, json};
 
 /// Translator from `OpenAI` chat completion request format to Codex Responses API format.
-pub struct OpenAIToCodex;
+pub struct OpenAIToOpenAINative;
 
 /// Convert a single message content value into Codex content parts array.
 fn to_codex_content(content: &Value, role: &str) -> Value {
@@ -121,7 +121,7 @@ fn build_codex_input(messages: &[Value]) -> Vec<Value> {
     input
 }
 
-impl RequestTranslator for OpenAIToCodex {
+impl RequestTranslator for OpenAIToOpenAINative {
     /// Translates an `OpenAI` chat completion request into a Codex Responses API request.
     ///
     /// # Errors
@@ -215,7 +215,7 @@ mod tests {
             "model": "o4-mini",
             "messages": [{"role": "user", "content": "Hello"}]
         });
-        let out = OpenAIToCodex.translate_request(req).unwrap();
+        let out = OpenAIToOpenAINative.translate_request(req).unwrap();
         assert_eq!(out["model"], "o4-mini");
         assert_eq!(out["store"], false);
         assert_eq!(out["input"][0]["type"], "message");
@@ -233,7 +233,7 @@ mod tests {
                 {"role": "user", "content": "Hi"}
             ]
         });
-        let out = OpenAIToCodex.translate_request(req).unwrap();
+        let out = OpenAIToOpenAINative.translate_request(req).unwrap();
         assert_eq!(out["instructions"], "You are helpful.");
         assert_eq!(out["input"].as_array().unwrap().len(), 1);
     }
@@ -245,7 +245,7 @@ mod tests {
             "messages": [{"role": "user", "content": "hi"}],
             "max_tokens": 500
         });
-        let out = OpenAIToCodex.translate_request(req).unwrap();
+        let out = OpenAIToOpenAINative.translate_request(req).unwrap();
         assert!(out.get("max_output_tokens").is_none());
         assert!(out.get("max_tokens").is_none());
     }
@@ -259,7 +259,7 @@ mod tests {
                 {"role": "assistant", "content": "Hello!"}
             ]
         });
-        let out = OpenAIToCodex.translate_request(req).unwrap();
+        let out = OpenAIToOpenAINative.translate_request(req).unwrap();
         assert_eq!(out["input"][0]["content"][0]["type"], "input_text");
         assert_eq!(out["input"][1]["content"][0]["type"], "output_text");
     }
@@ -267,7 +267,7 @@ mod tests {
     #[test]
     fn test_missing_model_error() {
         let req = json!({"messages": [{"role": "user", "content": "hi"}]});
-        assert!(OpenAIToCodex.translate_request(req).is_err());
+        assert!(OpenAIToOpenAINative.translate_request(req).is_err());
     }
 
     #[test]
@@ -284,7 +284,7 @@ mod tests {
                 }
             }]
         });
-        let out = OpenAIToCodex.translate_request(req).unwrap();
+        let out = OpenAIToOpenAINative.translate_request(req).unwrap();
         let tools = out["tools"].as_array().unwrap();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0]["type"], "function");
@@ -312,7 +312,7 @@ mod tests {
                 }
             ]
         });
-        let out = OpenAIToCodex.translate_request(req).unwrap();
+        let out = OpenAIToOpenAINative.translate_request(req).unwrap();
         let input = out["input"].as_array().unwrap();
         // user message + function_call
         assert_eq!(input.len(), 2);
@@ -340,7 +340,7 @@ mod tests {
                 {"role": "tool", "tool_call_id": "call_1", "content": "Sunny, 25C"}
             ]
         });
-        let out = OpenAIToCodex.translate_request(req).unwrap();
+        let out = OpenAIToOpenAINative.translate_request(req).unwrap();
         let input = out["input"].as_array().unwrap();
         // user + function_call + function_call_output
         assert_eq!(input.len(), 3);

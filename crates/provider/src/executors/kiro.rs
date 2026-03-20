@@ -6,7 +6,7 @@ use crate::http_util::ProviderHttp;
 use crate::registry;
 use async_trait::async_trait;
 use byokey_auth::AuthManager;
-use byokey_translate::{ClaudeToOpenAI, OpenAIToClaude};
+use byokey_translate::{AnthropicToOpenAI, OpenAIToAnthropic};
 use byokey_types::{
     ChatRequest, ProviderId, RateLimitStore,
     traits::{ProviderExecutor, ProviderResponse, RequestTranslator, ResponseTranslator, Result},
@@ -25,6 +25,7 @@ const ANTHROPIC_VERSION: &str = "2023-06-01";
 pub struct KiroExecutor {
     ph: ProviderHttp,
     api_key: Option<String>,
+    account_id: Option<String>,
     auth: Arc<AuthManager>,
 }
 
@@ -33,6 +34,7 @@ impl KiroExecutor {
     pub fn new(
         http: Client,
         api_key: Option<String>,
+        account_id: Option<String>,
         auth: Arc<AuthManager>,
         ratelimit: Option<Arc<RateLimitStore>>,
     ) -> Self {
@@ -40,7 +42,7 @@ impl KiroExecutor {
         if let Some(store) = ratelimit {
             ph = ph.with_ratelimit(store, ProviderId::Kiro);
         }
-        Self { ph, api_key, auth }
+        Self { ph, api_key, account_id, auth }
     }
 
     /// Returns the bearer token: API key if present, otherwise fetches an OAuth token.
@@ -48,7 +50,10 @@ impl KiroExecutor {
         if let Some(key) = &self.api_key {
             return Ok(key.clone());
         }
-        let token = self.auth.get_token(&ProviderId::Kiro).await?;
+        let token = match &self.account_id {
+            Some(id) => self.auth.get_token_for(&ProviderId::Kiro, id).await?,
+            None => self.auth.get_token(&ProviderId::Kiro).await?,
+        };
         Ok(token.access_token)
     }
 }
@@ -57,7 +62,7 @@ impl KiroExecutor {
 impl ProviderExecutor for KiroExecutor {
     async fn chat_completion(&self, request: ChatRequest) -> Result<ProviderResponse> {
         let stream = request.stream;
-        let mut body = OpenAIToClaude.translate_request(request.into_body())?;
+        let mut body = OpenAIToAnthropic.translate_request(request.into_body())?;
         body["stream"] = Value::Bool(stream);
 
         let token = self.bearer_token().await?;
@@ -76,7 +81,7 @@ impl ProviderExecutor for KiroExecutor {
             Ok(ProviderResponse::Stream(ProviderHttp::byte_stream(resp)))
         } else {
             let json: Value = resp.json().await?;
-            let translated = ClaudeToOpenAI.translate_response(json)?;
+            let translated = AnthropicToOpenAI.translate_response(json)?;
             Ok(ProviderResponse::Complete(translated))
         }
     }
@@ -94,7 +99,7 @@ mod tests {
     fn make_executor() -> KiroExecutor {
         let store = Arc::new(InMemoryTokenStore::new());
         let auth = Arc::new(AuthManager::new(store, rquest::Client::new()));
-        KiroExecutor::new(Client::new(), None, auth, None)
+        KiroExecutor::new(Client::new(), None, None, auth, None)
     }
 
     #[test]

@@ -8,9 +8,9 @@ use byokey_types::{ResponseTranslator, traits::Result};
 use serde_json::{Value, json};
 
 /// Translator from Codex Responses API `response` object to `OpenAI` chat completion format.
-pub struct CodexToOpenAI;
+pub struct OpenAINativeToOpenAI;
 
-impl ResponseTranslator for CodexToOpenAI {
+impl ResponseTranslator for OpenAINativeToOpenAI {
     /// Translates a Codex `response` object (the value of `response.completed.response`)
     /// into an `OpenAI` chat completion response.
     ///
@@ -146,20 +146,20 @@ mod tests {
 
     #[test]
     fn test_basic() {
-        let out = CodexToOpenAI.translate_response(sample()).unwrap();
+        let out = OpenAINativeToOpenAI.translate_response(sample()).unwrap();
         assert_eq!(out["choices"][0]["message"]["content"], "Hello there!");
         assert_eq!(out["choices"][0]["finish_reason"], "stop");
     }
 
     #[test]
     fn test_id_prefixed() {
-        let out = CodexToOpenAI.translate_response(sample()).unwrap();
+        let out = OpenAINativeToOpenAI.translate_response(sample()).unwrap();
         assert!(out["id"].as_str().unwrap().starts_with("chatcmpl-"));
     }
 
     #[test]
     fn test_usage() {
-        let out = CodexToOpenAI.translate_response(sample()).unwrap();
+        let out = OpenAINativeToOpenAI.translate_response(sample()).unwrap();
         assert_eq!(out["usage"]["prompt_tokens"], 10);
         assert_eq!(out["usage"]["completion_tokens"], 5);
         assert_eq!(out["usage"]["total_tokens"], 15);
@@ -167,14 +167,14 @@ mod tests {
 
     #[test]
     fn test_model_forwarded() {
-        let out = CodexToOpenAI.translate_response(sample()).unwrap();
+        let out = OpenAINativeToOpenAI.translate_response(sample()).unwrap();
         assert_eq!(out["model"], "o4-mini");
     }
 
     #[test]
     fn test_empty_output() {
         let res = json!({"id": "resp_x", "model": "o4-mini", "output": []});
-        let out = CodexToOpenAI.translate_response(res).unwrap();
+        let out = OpenAINativeToOpenAI.translate_response(res).unwrap();
         assert_eq!(out["choices"][0]["message"]["content"], "");
     }
 
@@ -194,7 +194,7 @@ mod tests {
             ],
             "usage": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15}
         });
-        let out = CodexToOpenAI.translate_response(res).unwrap();
+        let out = OpenAINativeToOpenAI.translate_response(res).unwrap();
         let choice = &out["choices"][0];
         assert_eq!(choice["finish_reason"], "tool_calls");
         assert!(choice["message"]["content"].is_null());

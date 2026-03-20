@@ -69,7 +69,7 @@ pub async fn codex_responses_passthrough(
     let config = state.config.load();
     let api_key = config
         .providers
-        .get(&ProviderId::Codex)
+        .get(&ProviderId::OpenAI)
         .and_then(|pc| pc.api_key.clone());
 
     let (is_oauth, token) = if let Some(key) = api_key {
@@ -77,7 +77,7 @@ pub async fn codex_responses_passthrough(
     } else {
         let tok = state
             .auth
-            .get_token(&ProviderId::Codex)
+            .get_token(&ProviderId::OpenAI)
             .await
             .map_err(ApiError::from)?;
         (true, tok.access_token)
@@ -174,15 +174,19 @@ pub async fn gemini_native_passthrough(
         .split_once(':')
         .map_or(action.as_str(), |(model, _)| model);
 
-    // If a backend override is configured, translate and route through it.
-    if let Some(backend_id) = &gemini_config.backend {
+    // If cross-provider routing is configured, translate and route through it.
+    let cross_provider = gemini_config
+        .routing
+        .iter()
+        .find(|e| e.provider != ProviderId::Gemini);
+    if let Some(entry) = cross_provider {
         return gemini_native_via_backend(
             &state,
             &action,
             &query_params,
             body,
             model_name,
-            backend_id,
+            &entry.provider,
         )
         .await;
     }
@@ -284,6 +288,7 @@ async fn gemini_native_via_backend(
     let executor = byokey_provider::make_executor(
         backend_id,
         backend_config.api_key,
+        None,
         state.auth.clone(),
         state.http.clone(),
         Some(state.ratelimits.clone()),

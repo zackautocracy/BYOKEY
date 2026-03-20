@@ -4,8 +4,8 @@ use byokey_types::{ByokError, ProviderId, traits::Result};
 use std::time::Duration;
 
 use crate::{
-    AuthManager, antigravity, callback, claude, codex, copilot, credentials, gemini, iflow, kimi,
-    pkce, qwen,
+    AuthManager, antigravity, anthropic, callback, copilot, credentials, gemini, iflow, kimi,
+    openai, pkce, qwen,
 };
 
 /// Run the full interactive login flow for the given provider.
@@ -20,8 +20,8 @@ use crate::{
 pub async fn login(provider: &ProviderId, auth: &AuthManager, account: Option<&str>) -> Result<()> {
     let http = rquest::Client::new();
     match provider {
-        ProviderId::Claude => login_claude(auth, &http, account).await,
-        ProviderId::Codex => login_codex(auth, &http, account).await,
+        ProviderId::Anthropic => login_claude(auth, &http, account).await,
+        ProviderId::OpenAI => login_codex(auth, &http, account).await,
         ProviderId::Copilot => login_copilot(auth, &http, account).await,
         ProviderId::Gemini => login_gemini(auth, &http, account).await,
         ProviderId::Antigravity => login_antigravity(auth, &http, account).await,
@@ -48,9 +48,9 @@ async fn login_claude(
         .ok_or_else(|| ByokError::Auth("claude credentials missing token_url".into()))?;
     let (verifier, challenge) = pkce::generate_pkce();
     let state = pkce::random_state();
-    let auth_url = claude::build_auth_url(&creds.client_id, &challenge, &state);
+    let auth_url = anthropic::build_auth_url(&creds.client_id, &challenge, &state);
 
-    let listener = callback::bind_callback(claude::CALLBACK_PORT).await?;
+    let listener = callback::bind_callback(anthropic::CALLBACK_PORT).await?;
     open_browser(&auth_url);
 
     let params = callback::accept_callback(listener).await?;
@@ -66,7 +66,7 @@ async fn login_claude(
         .get("code")
         .ok_or_else(|| ByokError::Auth("missing code parameter in callback".into()))?;
 
-    let body = claude::build_token_request(&creds.client_id, code, &verifier, &state);
+    let body = anthropic::build_token_request(&creds.client_id, code, &verifier, &state);
     let resp = http
         .post(token_url)
         .header("Content-Type", "application/json")
@@ -79,8 +79,8 @@ async fn login_claude(
         .await
         .map_err(|e| ByokError::Auth(format!("failed to parse token response: {e}")))?;
 
-    let token = claude::parse_token_response(&json)?;
-    save_login_token(auth, &ProviderId::Claude, token, account).await?;
+    let token = anthropic::parse_token_response(&json)?;
+    save_login_token(auth, &ProviderId::Anthropic, token, account).await?;
     tracing::info!("Claude login successful");
     Ok(())
 }
@@ -99,11 +99,11 @@ async fn login_codex(
         .ok_or_else(|| ByokError::Auth("codex credentials missing token_url".into()))?;
     let (verifier, challenge) = pkce::generate_pkce();
     let state = pkce::random_state();
-    let auth_url = codex::build_auth_url(&creds.client_id, &challenge, &state);
+    let auth_url = openai::build_auth_url(&creds.client_id, &challenge, &state);
 
     open_browser(&auth_url);
 
-    let params = callback::wait_for_callback(codex::CALLBACK_PORT).await?;
+    let params = callback::wait_for_callback(openai::CALLBACK_PORT).await?;
 
     let received_state = params.get("state").map_or("", String::as_str);
     if received_state != state {
@@ -116,7 +116,7 @@ async fn login_codex(
         .get("code")
         .ok_or_else(|| ByokError::Auth("missing code parameter in callback".into()))?;
 
-    let token_params = codex::token_form_params(&creds.client_id, code, &verifier);
+    let token_params = openai::token_form_params(&creds.client_id, code, &verifier);
     let resp = http
         .post(token_url)
         .header("Accept", "application/json")
@@ -129,8 +129,8 @@ async fn login_codex(
         .await
         .map_err(|e| ByokError::Auth(format!("failed to parse token response: {e}")))?;
 
-    let token = codex::parse_token_response(&json)?;
-    save_login_token(auth, &ProviderId::Codex, token, account).await?;
+    let token = openai::parse_token_response(&json)?;
+    save_login_token(auth, &ProviderId::OpenAI, token, account).await?;
     tracing::info!("Codex login successful");
     Ok(())
 }

@@ -79,9 +79,9 @@ mod tests {
             headers: HashMap::from([("x-ratelimit-remaining".into(), "50".into())]),
             captured_at: 1_700_000_000,
         };
-        store.update(ProviderId::Claude, "active".into(), snap);
+        store.update(ProviderId::Anthropic, "active".into(), snap);
 
-        let got = store.get(&ProviderId::Claude, "active").unwrap();
+        let got = store.get(&ProviderId::Anthropic, "active").unwrap();
         assert_eq!(got.headers["x-ratelimit-remaining"], "50");
         assert_eq!(got.captured_at, 1_700_000_000);
     }
@@ -89,14 +89,14 @@ mod tests {
     #[test]
     fn test_get_missing() {
         let store = RateLimitStore::new();
-        assert!(store.get(&ProviderId::Claude, "active").is_none());
+        assert!(store.get(&ProviderId::Anthropic, "active").is_none());
     }
 
     #[test]
     fn test_all() {
         let store = RateLimitStore::new();
         store.update(
-            ProviderId::Claude,
+            ProviderId::Anthropic,
             "a".into(),
             RateLimitSnapshot {
                 headers: HashMap::new(),
